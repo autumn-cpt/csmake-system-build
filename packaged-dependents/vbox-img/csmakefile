@@ -1,0 +1,108 @@
+# <copyright>
+# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# </copyright>
+
+[~~phases~~]
+clean=Clean all build artifacts
+sources=Get the source for vbox
+build=Create the tool
+package=Create the installer for the tool
+**sequences=clean->sources->build->package: Create a clean installer
+**default=clean->sources->build->package
+
+[metadata@vbox-img]
+name=vbox-img
+version=5.0.24
+#version=4.3.18
+description=vbox-img (Dependency for CloudSystem)
+about=Vbox has an (almost) standalone raw image converter
+ CloudSystem requires this to build valid streamOptimized
+ VMDKs
+ From VirtualBox Open Source Edition
+packager=HPE CloudSystem RIDE Team  <hpcloud-cs-ride@hpe.com>
+manufacturer=Hewlett Packard Enterprose
+depends=
+keywords=cloudsystem build dependency
+copyrights=vbox-copyright
+classifiers=
+    Development Status :: 5 - Production/Stable
+    Intended Audience :: Developers
+    Topic :: Software Development :: Build Tools
+    License :: OSI Approved :: GNU General Public License v2 (GPLv2)
+
+
+[copyright@vbox-copyright]
+license=GPLv2
+holder=Oracle Corporation
+years=2006-2015
+
+#Technically, the debian-directory-copyright is HP's here
+[DebianPackage@debian-vbox-img]
+package-version=1.0
+maps=vbox-img-installs
+result=%(RESULTS)s/debpackage
+arch=amd64
+debian-directory-copyright=vbox-copyright
+
+
+#Virtual box source to get include files to build against
+[environment@get-vbox-source-env]
+VBOX_INET_LOCATION=http://download.virtualbox.org/virtualbox
+VBOX_VERSION=%(metadata:version)s
+VBOX_FILE=VirtualBox-%(VBOX_VERSION)s
+VBOX_ARCHIVE=%(VBOX_INET_LOCATION)s/%(VBOX_VERSION)s/%(VBOX_FILE)s.tar.bz2
+
+
+#Build VirtualBox
+[Shell@get-vbox-source]
+command(sources)=set -x
+  pushd %(RESULTS)s
+  if [ ! -e %(VBOX_FILE)s ]
+  then
+      wget -O %(VBOX_FILE)s.tar.bz2 -v %(VBOX_ARCHIVE)s
+      bunzip2 %(VBOX_FILE)s.tar.bz2
+      tar -xvf %(VBOX_FILE)s.tar
+  fi
+  popd
+command(clean)=rm -rf %(RESULTS)s/%(VBOX_FILE)s*
+
+[Shell@configure-vbox]
+command=cd %(RESULTS)s/%(VBOX_FILE)s; ./configure --disable-libvpx --disable-hardening
+
+[Shell@make-vbox]
+**yields-files=<bin (elf-executable:commands)> %(VBOX_FILE)s/out/linux.amd64/release/bin/vbox-img
+command= cd %(RESULTS)s/%(VBOX_FILE)s; source env.sh; kmk vbox-img
+
+[installmap@vbox-img-installs]
+path_root=INSTALL_ROOT
+owner_root=root
+group_root=root
+
+map_bin=
+   map: <bin> -(1-1)-> {INSTALL_ROOT}/usr/local/bin/{~~file~~}}
+   copyright: vbox-copyright
+   owner:{root}
+   group:{root}
+   permissions: 755
+
+[subcommand@common-build-steps]
+description=Prepare/build files for packaging
+0000=get-vbox-source-env, get-vbox-source, configure-vbox, make-vbox
+
+[command@]
+description=Create and package a csmake release
+00=vbox-img, common-build-steps, debian-vbox-img
+

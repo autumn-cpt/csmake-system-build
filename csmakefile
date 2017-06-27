@@ -1,0 +1,112 @@
+# <copyright>
+# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# </copyright>
+
+[~~phases~~]
+clean=Remove all csmake generated files
+package=Create the csmake package
+test=Run testing for csmake
+**sequences=
+   clean -> package: create the csmake install package
+**default=clean -> package
+
+[metadata@csmake-system-build]
+name=csmake-system-build
+version=1.0.10
+description=csmake library enabling building out systems
+about=csmake library providing various modules that cooperate
+ to enable the building of full compute system disks capable of
+ multiple devices, partitioning, lvm, grub, etc., as well as modules
+ to allow for the ability to create various kinds of vm disks and export
+ types (ova).
+packager=HP CloudSystem RIDE Team  <hpcloud-cs-ride@hpe.com>
+manufacturer=Hewlett Packard Enterprise
+depends=python (>= 2.7), csmake, qemu-img | qemu-utils, vbox-img
+recommends=python-coverage, chrpath
+suggests=csmake-providers
+keywords=make build development system vm
+copyrights=csmake-copyright
+classifiers=
+    Development Status :: 4 - Beta
+    Intended Audience :: Developers
+    Topic :: Software Development :: Build Tools
+    Topic :: System :: Installation/Setup
+    Programming Language :: Python :: 2
+    Programming Language :: Python :: 2.6
+    Programming Language :: Python :: 2.7
+    License :: Other/Proprietary License
+**files=
+    <CsmakeModules (python:csmake-modules)> CsmakeModules/*.py
+
+[copyright@csmake-copyright]
+disclaimer=This software was produced for and by Hewlett Packard Enterprise
+   All rights are reserved.
+license=non-free
+holder=Hewlett Packard Enterprise
+years=2014-2016
+comment=If csmake is made public, this copyright would need to change to
+   reflect that
+
+[DebianPackage@debian-csmake]
+package-version=1.0
+default_python-script={root}/usr/bin/
+maps=csmake-installs
+result=%(RESULTS)s/debpackage
+debian-directory-copyright=csmake-copyright
+
+[versioning@snapshot-version]
+designation=snapshot
+format={datetime}.{gitSHA}
+shell_datetime=date --utc +%%Y%%m%%d%%H%%M%%S
+shell_gitSHA=git rev-parse HEAD
+
+[versioning@rc-version]
+designation=rc
+format=rc{rc}
+value_rc=1
+
+[CompressManPage@manfiles]
+**maps=
+      <(:man-source)> -(1-1)->  <(gzip:manpage)> man/{~~filename~~}
+
+[installmap@csmake-installs]
+#The copyrights are here as an example to demonstrate the ability
+#To mark copyrights for different sections
+path_root=INSTALL_ROOT
+path_python-lib=PYTHON
+path_python-script=PYTHON_SCRIPT
+owner_root=root
+group_root=root
+
+map_CsmakeModules=
+   map: <CsmakeModules> -(1-1)-> {PYTHON}/CsmakeSystemBuild/CsmakeModules/{~~file~~}}
+   copyright: csmake-copyright
+   owner:{root}
+   group:{root}
+   permissions:644
+
+[command@snapshot]
+description=Create and package a csmake snapshot
+00=csmake, snapshot-version, command@
+
+[command@rc]
+description=Create and package a csmake release candidate
+00=csmake, rc-version, command@
+
+[command@]
+description=Create and package a csmake release
+00=csmake-system-build, debian-csmake
+

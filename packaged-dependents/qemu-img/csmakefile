@@ -1,0 +1,93 @@
+# <copyright>
+# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# </copyright>
+
+[~~phases~~]
+clean=cleanup build artifacts
+build=build the tool
+package=create the tool installer
+pull=fetch the source for the tool
+**sequences=clean->pull->build->package: Create a clean installer
+**default=clean->pull->build->package
+
+[metadata@qemu]
+name=qemu-img
+version=2.2.1
+description=qemu-img (Dependency for CloudSystem)
+about=Fast software emulator image manager
+ CloudSystem requires this version of qemu-img to build streamOptimized
+ VMDKs
+packager=HPE CloudSystem RIDE Team  <hpcloud-cs-ride@hpe.com>
+manufacturer=QEMU Project
+depends=
+keywords=cloudsystem build dependency
+copyrights=qemu-copyright
+classifiers=
+    Development Status :: 5 - Production/Stable
+    Intended Audience :: Developers
+    Topic :: Software Development :: Build Tools
+    License :: OSI Approved :: GNU General Public License v2 (GPLv2)
+
+#Requires pixman-1_dev to build
+
+[copyright@qemu-copyright]
+license=GPLv2
+holder=Fabrice Bellard, IBM, Andrzej Zaborowski, et. al.
+years=2008-2015
+comment=NOTE: Incomplete attribution
+
+#Technically, the debian-directory-copyright is HP's here
+[DebianPackage@debian-qemu]
+package-version=1.0
+maps=qemu-installs
+result=%(RESULTS)s/debpackage
+arch=amd64
+debian-directory-copyright=qemu-copyright
+
+[GitDependent@git-qemu]
+URL=http://git.qemu.org/git/qemu.git
+name=qemu
+local=%(RESULTS)s
+ref=branch:master
+#ref=tag:v2.2.0
+
+[Shell@configure-qemu]
+command(build)= cd %(RESULTS)s/qemu; ./configure --disable-kvm --disable-system --with-system-pixman
+
+[Shell@make-qemu]
+**yields-files=<bin (elf-executable:commands)> %(RESULTS)s/qemu/qemu-img
+command(build)= cd %(RESULTS)s/qemu; make qemu-img
+
+[installmap@qemu-installs]
+path_root=INSTALL_ROOT
+owner_root=root
+group_root=root
+
+map_bin=
+   map: <bin> -(1-1)-> {INSTALL_ROOT}/usr/local/bin/{~~file~~}}
+   copyright: qemu-copyright
+   owner:{root}
+   group:{root}
+   permissions: 755
+
+[subcommand@common-build-steps]
+description=Prepare/build files for packaging
+0000=git-qemu, configure-qemu, make-qemu
+
+[command@]
+description=Create and package a csmake release
+00=qemu, common-build-steps, debian-qemu
+

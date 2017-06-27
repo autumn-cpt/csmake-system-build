@@ -1,0 +1,27 @@
+This project builds the qemu-img dependency for CloudSystem 8.5 builds
+
+You may need your distro's qemu installation to build this package
+and to support execution of qemu-img.  
+This built version of qemu-img is tested in an environment where 
+qemu 1.5 is installed and works well.
+
+If you run into missing dependencies issues not covered here, install 
+your distro's version of the qemu suite, then proceed to build
+
+One dependency that will not be resolved by installing qemu is the
+dev package for pixman-1 (ubuntu: sudo apt-get install libpixman-1-dev)
+
+Once libpixman is installed, do:
+csmake build package
+
+This requires access to the Internet to perform the build.
+
+Alternatively, you can do a git clone of the qemu source (see csmakefile for
+location and tag details) into target (or whereever your results directory
+you want to use lives) before executing the build to avoid any proxy issues
+unresolved in the build.  It may also work to define http_proxy in your shell
+environment.
+
+When the build is complete target/debpackage will contain the deb ready
+to install.
+
