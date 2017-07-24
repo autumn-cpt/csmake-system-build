@@ -25,16 +25,16 @@ test=Run testing for csmake
 
 [metadata@csmake-system-build]
 name=csmake-system-build
-version=1.0.10
+version=1.0.11
 description=csmake library enabling building out systems
 about=csmake library providing various modules that cooperate
  to enable the building of full compute system disks capable of
  multiple devices, partitioning, lvm, grub, etc., as well as modules
  to allow for the ability to create various kinds of vm disks and export
  types (ova).
-packager=HP CloudSystem RIDE Team  <hpcloud-cs-ride@hpe.com>
+packager=Jeremiah Patterson <jerpat@hpe.com>
 manufacturer=Hewlett Packard Enterprise
-depends=python (>= 2.7), csmake, qemu-img | qemu-utils, vbox-img
+depends=python (>= 2.6), csmake, qemu-img | qemu-utils, vbox-img
 recommends=python-coverage, chrpath
 suggests=csmake-providers
 keywords=make build development system vm
@@ -47,18 +47,29 @@ classifiers=
     Programming Language :: Python :: 2
     Programming Language :: Python :: 2.6
     Programming Language :: Python :: 2.7
-    License :: Other/Proprietary License
+    License :: OSI Approved :: GNU General Public License v3 (GPLv3)
 **files=
     <CsmakeModules (python:csmake-modules)> CsmakeModules/*.py
 
 [copyright@csmake-copyright]
-disclaimer=This software was produced for and by Hewlett Packard Enterprise
-   All rights are reserved.
-license=non-free
+disclaimer=
+ This program is free software: you can redistribute it and/or modify it
+ under the terms of the GNU General Public License as published by the
+ Free Software Foundation, either version 3 of the License, or (at your
+ option) any later version.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+ Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ .
+ On Debian based systems see: /usr/share/common-licenses
+license=GPLv3
 holder=Hewlett Packard Enterprise
-years=2014-2016
-comment=If csmake is made public, this copyright would need to change to
-   reflect that
+years=2014-2017
 
 [DebianPackage@debian-csmake]
 package-version=1.0

@@ -22,18 +22,19 @@ package=create the tool installer
 pull=fetch the source for the tool
 **sequences=clean->pull->build->package: Create a clean installer
 **default=clean->pull->build->package
+**requires=zlib1g-dev, csmake-packaging, csmake-swak, glib, gthread
 
 [metadata@qemu]
 name=qemu-img
 version=2.2.1
-description=qemu-img (Dependency for CloudSystem)
+description=qemu-img (Dependency for csmake-system-build)
 about=Fast software emulator image manager
- CloudSystem requires this version of qemu-img to build streamOptimized
- VMDKs
-packager=HPE CloudSystem RIDE Team  <hpcloud-cs-ride@hpe.com>
-manufacturer=QEMU Project
+ The csmake-system-build library requires this version of qemu-img to build
+ streamOptimized VMDKs
+packager=Jeremiah Patterson <jerpat@hpe.com>
+manufacturer=Hewlett Packard Enterprise
 depends=
-keywords=cloudsystem build dependency
+keywords=csmake-system-build build dependency
 copyrights=qemu-copyright
 classifiers=
     Development Status :: 5 - Production/Stable
@@ -56,6 +57,14 @@ maps=qemu-installs
 result=%(RESULTS)s/debpackage
 arch=amd64
 debian-directory-copyright=qemu-copyright
+
+[Signature@default-signature]
+[RpmPackage@rpm-qemu]
+package-version=1.0
+maps=qemu-installs
+result=%(RESULTS)s/rpmfile
+arch=x86_64
+signers=default-signature
 
 [GitDependent@git-qemu]
 URL=http://git.qemu.org/git/qemu.git
@@ -89,5 +98,5 @@ description=Prepare/build files for packaging
 
 [command@]
 description=Create and package a csmake release
-00=qemu, common-build-steps, debian-qemu
+00=qemu, common-build-steps, debian-qemu & rpm-qemu
 
