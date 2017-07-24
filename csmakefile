@@ -22,6 +22,7 @@ test=Run testing for csmake
 **sequences=
    clean -> package: create the csmake install package
 **default=clean -> package
+**requires= csmake-swak, csmake-packaging
 
 [metadata@csmake-system-build]
 name=csmake-system-build
@@ -34,7 +35,13 @@ about=csmake library providing various modules that cooperate
  types (ova).
 packager=Jeremiah Patterson <jerpat@hpe.com>
 manufacturer=Hewlett Packard Enterprise
-depends=python (>= 2.6), csmake, qemu-img | qemu-utils, vbox-img
+#Rpm support and package name translation doesn't support package logical
+#  operators (csmake:GH Issue 24, csmake-packaging:GH Issue 2)
+#  Just continue to package and support qemu-img for now...CentOS 7 is back
+#  on 1.5 ... oy vez...2.9 is out (and can be built with the csmake spec
+#  in the packaged-dependents directory)
+#depends=python (>= 2.6), csmake, qemu-img | qemu-utils, vbox-img
+depends=python (>= 2.6), csmake, qemu-img, vbox-img
 recommends=python-coverage, chrpath
 suggests=csmake-providers
 keywords=make build development system vm
@@ -78,6 +85,14 @@ maps=csmake-installs
 result=%(RESULTS)s/debpackage
 debian-directory-copyright=csmake-copyright
 
+[Signature@default-signature]
+[RpmPackage@rpm-csmake]
+package-version=1.0
+default_python-script={root}/usr/bin/
+maps=csmake-installs
+result=%(RESULTS)s/rpmfile
+signers=default-signature
+
 [versioning@snapshot-version]
 designation=snapshot
 format={datetime}.{gitSHA}
@@ -119,5 +134,5 @@ description=Create and package a csmake release candidate
 
 [command@]
 description=Create and package a csmake release
-00=csmake-system-build, debian-csmake
+00=csmake-system-build, debian-csmake & rpm-csmake
 
