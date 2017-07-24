@@ -22,7 +22,7 @@ package=create the tool installer
 pull=fetch the source for the tool
 **sequences=clean->pull->build->package: Create a clean installer
 **default=clean->pull->build->package
-**requires=zlib1g-dev, csmake-packaging, csmake-swak, glib, gthread
+**requires=zlib1g-dev, csmake-packaging, csmake-swak, glib, gthread, pixman-devel
 
 [metadata@qemu]
 name=qemu-img
@@ -70,8 +70,8 @@ signers=default-signature
 URL=http://git.qemu.org/git/qemu.git
 name=qemu
 local=%(RESULTS)s
-ref=branch:master
-#ref=tag:v2.2.0
+#ref=branch:master
+ref=tag:v%(metadata:version)s
 
 [Shell@configure-qemu]
 command(build)= cd %(RESULTS)s/qemu; ./configure --disable-kvm --disable-system --with-system-pixman
