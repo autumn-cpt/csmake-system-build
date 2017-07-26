@@ -22,7 +22,7 @@ package=create the tool installer
 pull=fetch the source for the tool
 **sequences=clean->pull->build->package: Create a clean installer
 **default=clean->pull->build->package
-**requires=zlib1g-dev, csmake-packaging, csmake-swak, glib, gthread, pixman-devel
+**requires=zlib1g-dev, csmake-packaging, csmake-swak, glib, gthread, pixman-devel | libpixman-1-dev
 
 [metadata@qemu]
 name=qemu-img
