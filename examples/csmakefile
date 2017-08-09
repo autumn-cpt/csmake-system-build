@@ -1,0 +1,540 @@
+# <copyright>
+# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# </copyright>
+
+######################################################
+######################################################
+# example csmakefile for a simple vm
+######################################################
+######################################################
+
+#-----------------------------------------------------------------
+# The phases section allows you to define valid phases
+# for your build and the valid sequences of the phases
+# This section also allows you to document any build dependendies
+# and multicommands that are valid from the command line
+# that work with the given sequences.
+#-----------------------------------------------------------------
+[~~phases~~]
+pull=Get all artefacts required for build
+download=Get only non-provider pulls (WgetPicker, for example)
+sources=Get only provider pulls (Swift, Git, ...)
+build=Create desired build artefact
+package=Create a package result of the build
+prep=Prepare artefact storage for build push
+push=Push artefacts to storage
+push_local=Push artefacts to local archive - marks as local
+clear_local=Remove the local mark for the result of the command
+clean=Clean all build artefacts
+clean_results=Cleans the given appliance build and results directories
+clean_build=Cleans the build directory results
+**sequences=
+   clean_results->pull->build->package->clean_build: Create a clean build of an image
+   clean_results->build->package->push_local->clean_build: Create a clean build and save to local archive only
+   clean_results->pull->build->package->prep->push->clean_build: (official build) Create and push image to remote archive
+   clean_results->pull->build->package->prep->push->push_local->clean_build: Create and push image to local and remote archive
+**default=clean_build->clean_results->pull->build->package->clean_build
+**requires=wget, csmake-providers, csmake-system-build, csmake-swak
+
+
+#=======================================================
+#    HLinux initialization sections
+#=======================================================
+
+#####################################################
+# Configure the appropriate APT repo to pull all
+#  dpkg installs
+# This section is a holdover from DIB, so it defines
+# some DIB shell variables.
+# For more information:
+#    csmake --list-type HLinuxConfigApt
+# This section is here for reference for debian based builds
+[HLinuxConfigApt@build-config-hlinux]
+config=%(RAWDIR)s.intermediates/%(IMAGE)s-apt
+aptURL=%(HLINUX_APT_SERVER)s
+archive=%(HLINUX_HOS_REPO)s
+release=%(HLINUX_RELEASE)s
+sections=%(HLINUX_SECTIONS)s
+debootstrap=%(WORKING)s/hLinux-debootstrap
+
+##############################################
+# Steps to build out the install of CentOS 6
+[Shell@initialize-image]
+**yields-files=<images (raw-disk:base-image)> %(RAWDIR)s
+command= set -eux
+  FULL_RAWDIR=`realpath %(RAWDIR)s`
+  pushd %(BUILDDIR)s
+  rm -f RPM-GPG-KEY-CentOS-*
+  wget http://vault.centos.org/RPM-GPG-KEY-CentOS-6
+  mkdir -p $FULL_RAWDIR/var/lib/rpm
+  sudo rpm --rebuilddb --root=$FULL_RAWDIR
+  sudo rpm --root=$FULL_RAWDIR --import RPM-GPG-KEY-CentOS-6
+  wget http://mirrors.kernel.org/centos/6.9/os/x86_64/Packages/centos-release-6-9.el6.12.3.x86_64.rpm
+  sudo rpm -i --root=$FULL_RAWDIR --nodeps centos-release-6-9.*.rpm
+  sudo yum --installroot=$FULL_RAWDIR -y clean all
+  sudo yum --installroot=$FULL_RAWDIR -y update
+  sudo yum --installroot=$FULL_RAWDIR install -y rpm-build yum
+  sudo -E yum --installroot=$FULL_RAWDIR install -y %(BASE_CENTOS_PACKAGES)s
+
+############################################
+# This section is here for reference for building out a debian based image
+# it is not currently used
+[Shell@initialize-image-hlinux]
+**yields-files=<images (raw-disk:base-image)> %(RAWDIR)s
+env=build-config-hlinux
+command=set -eux
+    for keyfile in `ls %(HLINUX_KEY_DIR)s/*.pub`
+    do
+        gpg --keyring=%(HLINUX_KEY_DIR)s/keyring --no-default-keyring --import ${keyfile}
+    done
+    sudo debootstrap                            \
+        --verbose                               \
+        --keyring=%(HLINUX_KEY_DIR)s/keyring    \
+        --include="%(BASE_HLINUX_PACKAGES)s"    \
+        --arch=%(ARCH)s                         \
+        ${DIB_RELEASE}                          \
+        %(RAWDIR)s                            \
+        ${DIB_DISTRIBUTION_MIRROR}              \
+        %(WORKING)s/hLinux-debootstrap
+    APT_DIR=%(RAWDIR)s/etc/apt
+    sudo mkdir -p ${APT_DIR}
+    sudo cp ${DIB_APT_CONF} ${APT_DIR}
+    sudo cp ${DIB_APT_SOURCES} ${APT_DIR}
+    sudo cp %(HLINUX_KEY_DIR)s/keyring ${APT_DIR}
+
+###########################################################
+# This is how you can save and restore the raw debootstrap
+#   This would be useful if you wanted to do the debootstrap
+#   once for many different builds and to a two or more part build sequence...
+# These sections are not currently being used
+[TarballRawDisk@package-image]
+**maps=<(raw-disk)> -(1-1)-> <base-results (tarball:disk-image)> %(RESULTDIR)s/%(IMAGE)s
+
+[UntarballRawDisk@stage-raw-disk]
+**maps=<(tarball:disk-image)> -(1-1)-> <images (raw-disk:staged-base)> %(BUILDDIR)s/%(IMAGE)s
+
+
+#=======================================================
+#   First initialization steps for raw image
+#=======================================================
+
+[subcommand@do-base-setup]
+description=Steps to customize the raw debootstrap
+1000=setup-vm-defaults
+1500=create-update-grub
+2000=create-default-user
+2200=ping-suid
+2500=setup-us-english-locale
+3000=install-base-packages
+
+################################################
+# NOTE: This section is here for reference for building debian
+[ChrootShell@debian-setup-vm-defaults]
+chroot=%(RAWDIR)s
+command=set -eux
+    #Setup a default hostname
+    echo "csmake-vm" > /etc/hostname
+    echo "127.0.0.1    csmake-vm" >> /etc/hosts
+
+    #Setup the mount tab file
+    touch /etc/mtab
+
+    #Setup the initial initramfs (debian only)
+    update-initramfs -u -k all
+
+    #Set up sudoers to be passwordless *YMMV
+    sed -i 's/^\%%sudo.*/\%%sudo ALL = (ALL) NOPASSWD: ALL/' /etc/sudoers
+
+#############################################
+# TODO: This is a bit of a hack to bridge grub2 and legacy grub
+[ChrootShell@create-update-grub]
+chroot=%(RAWDIR)s
+command=set -eux
+    #Check to see if update-grub exists
+    if which update-grub
+    then
+        echo "update-grub already exists on this system"
+    else
+        cat << EOF > /usr/bin/update-grub
+            #!/bin/sh
+            set -e
+            exec grub-mkconfig -o /boot/grub/grub.cfg "$@"
+        EOF
+        chmod +x /usr/bin/update-grub
+    fi
+
+[ChrootShell@setup-vm-defaults]
+chroot=%(RAWDIR)s
+command=set -eux
+    #Setup a default hostname
+    echo "csmake-vm" > /etc/hostname
+    echo "127.0.0.1    csmake-vm" >> /etc/hosts
+
+    #Setup the mount tab file
+    touch /etc/mtab
+
+    #Set up sudoers to be passwordless *YMMV
+    sed -i 's/^\%%sudo.*/\%%sudo ALL = (ALL) NOPASSWD: ALL/' /etc/sudoers
+
+[ChrootShell@create-default-user]
+chroot=%(RAWDIR)s
+command=set -eux
+    if grep -e "sudo\:" /etc/group
+    then
+        echo "Group 'sudo' exists"
+    else
+        groupadd sudo
+    fi
+    if grep -e "%(DEFAULT_USERNAME)s\:" /etc/passwd
+    then
+        echo "User '%(DEFAULT_USERNAME)s' already exists"
+    else
+        useradd -G sudo -p "" -m -s /bin/bash -U %(DEFAULT_USERNAME)s
+        #Failing with cannot open /etc/passwd on CentOS
+        #echo '%(DEFAULT_USERNAME)s:%(DEFAULT_USERNAME)s' | chpasswd
+        #Failing wiht cannot open /dev/urandom
+        #ssh-keygen -t rsa -N "" -C %(DEFAULT_USERNAME)s -f id_rsa
+        #mkdir -p /home/%(DEFAULT_USERNAME)s/.ssh
+        #mv id_rsa /home/%(DEFAULT_USERNAME)s/.ssh/id_rsa
+        #mv id_rsa.pub /home/%(DEFAULT_USERNAME)s/.ssh/id_rsa.pub
+        #cat /home/%(DEFAULT_USERNAME)s/.ssh/id_rsa.pub >> /home/%(DEFAULT_USERNAME)s/.ssh/authorized_keys
+        mkdir -p /home/%(DEFAULT_USERNAME)s/stage
+        chown -R %(DEFAULT_USERNAME)s:%(DEFAULT_USERNAME)s /home/%(DEFAULT_USERNAME)s
+        chmod -R 755 /home/%(DEFAULT_USERNAME)s
+        #chmod -R 750 /home/%(DEFAULT_USERNAME)s/.ssh
+        #chmod 600 /home/%(DEFAULT_USERNAME)s/.ssh/authorized_keys
+        #chmod 600 /home/%(DEFAULT_USERNAME)s/.ssh/id_rsa
+        #chmod 650 /home/%(DEFAULT_USERNAME)s/.ssh/id_rsa.pub
+    fi
+
+[ChrootShell@ping-suid]
+chroot=%(RAWDIR)s
+command=set -eux
+    chmod u+s /bin/ping
+
+[ChrootShell@setup-us-english-locale]
+chroot=%(RAWDIR)s
+command=set -eux
+
+#Section here for reference for debian based systems
+[ChrootShell@debian-setup-us-english-locale]
+chroot=%(RAWDIR)s
+command=set -eux
+    mv /etc/locale.gen /etc/locale.gen.old
+    echo "en_US.UTF-8 en_US" > /etc/locale.gen
+    locale-gen
+    apt-get update
+
+#If you plan to use pip and virtualenv to do any package installs
+# for python, consider using PypiFacade from the csmake-providers library
+# as an aspect decorating this and any other section that you would use pip
+# or easy_install with.  Note, you need to control both the version of
+# pip and virtualenv to control the desired version of pip.
+# The example PypiFacade config demonstrates how visibility
+# may be limited for version availability
+# For more information, after csmake-providers is installed:
+#   csmake --list-type PypiFacade
+#[&PypiFacade@install-base-packages]
+#indicies=https://pypi.python.org/simple
+#constraints= pip==8.1.2; virtualenv==15.0.2
+#chroot=%(RAWDIR)s
+[ChrootShell@install-base-packages]
+chroot=%(RAWDIR)s
+command=set -eux
+    #easy_install pip
+    #pip install -U pip
+    #pip install virtualenv
+
+
+#=======================================================
+#   SystemBuild sections - specifying the disk layout
+#=======================================================
+[subcommand@setup-disk]
+**yields-files= <drives (raw-image:prepped)> %(BUILDDIR)s/drive
+description=Setups to set up the vm disk
+1000=setup-disk-system
+2000=setup-disk-device
+3000=setup-disk-partitions
+4000=setup-disk-lvm
+5000=setup-disk-filesystem
+
+[SystemBuild@setup-disk-system]
+description=A csmake vm
+system=vm
+
+[SystemBuildDisk@setup-disk-device]
+system=vm
+disk-name=vm_disk
+disk-file=%(BUILDDIR)s/drive
+size=%(DISK_SIZE)s
+
+#GPT isn't defined yet, but would be easy to put in the next roll of
+# the csmake-system-build library.
+[SystemBuildMsdosPartitions@setup-disk-partitions]
+system=vm
+disk-name=vm_disk
+part_boot=1, 1G, linux, boot
+part_swap=2, 4G, linux-swap
+part_data=3, %(PV_SIZE)s, linux, lvm
+
+[SystemBuildLVM@setup-disk-lvm]
+system=vm
+pv_root_vol=vm_disk.data
+vg_HPEprimary=root_vol
+lv_root=VMprimary, %(LV_SIZE)s
+
+[SystemBuildFileSystem@setup-disk-filesystem]
+system=vm
+/=root, ext4
+/boot=vm_disk.boot, ext2
+
+
+#===========================================================
+#   SystemBuild sections - ending the config and generation
+#===========================================================
+[SystemBuildPopulateFstab@setup-disk-write-fstab]
+system=vm
+
+[SystemBuildOldGrubInstall@setup-disk-bootloader]
+system=vm
+
+[SystemBuildEnd@setup-disk-end]
+system=vm
+
+
+#===========================================================
+#   Pushing the raw debootstrap into the image
+#===========================================================
+# NOTE: the jist of what's going on here is that we're mounting
+# the HPEvm system we've specified above just for this one section, and
+# then copying the hLinux debootstrapped raw disk into it.
+#
+# The **maps section makes use of csmake's filetracking system
+# and the **yields-files definition in the Shell@initialize-image section above
+#  Which was:
+#    **yields-files=<images (raw-disk:base-image)> %(RAWDIR)s
+#
+# For the mapping, we only need to specify what we want, which is
+# whatever the earlier part of the build has defined as a raw-disk,
+# which, as you can see below, is specified by only filling in that
+# part of the file type.  CopyRawImage will execute the copy based
+# on the results of the specified mapping.
+#
+#  For more info:
+#      man csmakefile
+#  and look for the "FILE MAPPING AND TRACKING" section
+[&SystemBuildMount@copy-into-disk]
+system=vm
+location=%(VM_MOUNT_POINT)s
+[CopyRawImage@copy-into-disk]
+**maps=<(raw-disk)> -(1-1)-> <partitions (raw-disk:root-partition)> %(VM_MOUNT_POINT)s
+
+
+#=======================================================
+#   Creating the full disk image
+#=======================================================
+
+[&LockSection@create-bootable-disk-image]
+path=/tmp/csmake
+tag=vm_lvm_VMprimary
+[subcommand@create-bootable-disk-image]
+description=Create a bootable and customized disk from a debootstrap image
+1000=setup-disk, copy-into-disk, setup-boot-for-disk, setup-disk-end
+
+[&SystemBuildMount@setup-boot-for-disk]
+system=vm
+location=%(VM_MOUNT_POINT)s
+[subcommand@setup-boot-for-disk]
+description=Setup and customize the vm system and filesystem
+1000=setup-disk-write-fstab
+2000=do-mounted-custom-steps
+3000=setup-disk-bootloader
+4000=inject-used-disk-size
+
+[subcommand@do-mounted-custom-steps]
+description=***This is where you do any customization steps you want***
+1000=setup-resolv, install-kernel
+#0000=do-my-custom-step-here
+
+[Shell@setup-resolv]
+command=set -eux
+   #You may need to do something like:
+   #echo "nameserver 192.168.1.1" > /etc/resolv.conf
+   sudo cp /etc/resolv.conf > %(VM_MOUNT_POINT)s/etc/resolv.conf
+
+[ChrootShell@install-kernel]
+chroot=%(VM_MOUNT_POINT)s
+command=set -eux
+   rpm -vv --rebuilddb
+   yum check
+   yum -y install kernel
+   yum -y update kernel
+
+#This odd section is used to ascertain the actual used size of
+#  the disk for later consumption by the OVA definition
+#  It adds metadata to the tracked file in the filetracking system
+#  Which is why it maps 1-1 to {~~path~~}/{~~file~~} (the identity mapping).
+[InjectDiskUsedToIndex@inject-used-disk-size]
+**maps=<(raw-image:prepped)> -(1-1)-> <(raw-image:bootable)> {~~path~~}/{~~file~~}
+mount=%(VM_MOUNT_POINT)s
+
+
+#=======================================================
+#   Creating the qcow2 and ova images
+#=======================================================
+#NOTE: the -o compat ensures that this can be used on older
+#      KVM - YMMV, you may not need 'compat', you may want to
+#      move to a newer version of the qemu toolset...
+#      Because there is churn with that toolset that can bite you
+#      so, you want to lock down the version you use
+#      - we can help with this, as desired...
+[ConvertVirtualImage@create-qcow2]
+**maps=<(raw-image:bootable)> -(1-1)-> <images (qcow2-image:vm)> %(RESULTDIR)s/%(IMAGE)s.qcow2
+compress=True
+extra=-o compat=0.10
+
+[subcommand@create-ova-steps]
+description=Steps to create an ova
+0000=create-vmdk, modify-vmdk, create-ova
+
+[ConvertVirtualImage@create-vmdk]
+**maps=<(raw-image:bootable)> -(1-1)-> <images (vmdk-image:vm-disk)> %(BUILDDIR)s/%(IMAGE)s.vmdk
+
+#This switches the hardware definition in the vmdk image for the controller
+# - and also pretends that the open-vm-tools are installed.
+# You may want to install open-vm-tools on the system during the customization
+# step above...
+# If desired, you can mess around with the ddb even more - just be careful,
+# This reaches straight in to the vmdk's DDB, so know what you're doing here.
+[ModifyVmdkDDB@modify-vmdk]
+**maps=<(vmdk-image)> -(1-1)-> {~~path~~}/{~~file~~}
+substitute_1=ddb.adapterType="ide"
+   ddb.adapterType="lsilogic"
+append=ddb.toolsVersion="2147483647"
+
+[CreateOVA@create-ova]
+**maps=<(vmdk-image:vm-disk)> -(1-1)-> <images (ova:vm)> %(RESULTDIR)s/{~~filename~~}.ova
+vm-name=%(IMAGE)s
+vm-description=%(VM_DESCRIPTION)s
+vm-cpus=%(VM_CPU_COUNT)s
+vm-memory=%(VM_MEMORY_SIZE)s
+#There's no hlinux definition for OVA, so ubuntu64 is the closest match
+os=centos64
+os-description=hLinux cattleprod
+disk-capacity-vm-disk=%(DISK_SIZE)s
+disk-format-vm-disk=VMDK Stream Optimized
+add-cd-dvd-rom=False
+
+#=======================================================
+#   General housekeeping sections
+#=======================================================
+
+############################################################
+# Section to invoke to bring in the build settings sections
+[include@include-config]
+file=config.csmake
+
+#####################################################
+# Section to get the current HPE hLinux keys
+[Shell@hlinux-get-key]
+command=set -eux
+    mkdir -p %(HLINUX_KEY_DIR)s
+    pushd %(HLINUX_KEY_DIR)s
+    rm -rf %(HLINUX_KEY_FILE)s
+    wget --no-check-certificate %(HLINUX_KEY_URL)s
+    tar -xzvf %(HLINUX_KEY_FILE)s
+    rm -rf %(HLINUX_KEY_FILE)s
+    popd
+command-clean= rm -rf %(HLINUX_KEY_DIR)s
+command-clean(clean_build)= rm -rf %(HLINUX_KEY_DIR)s
+exec=/bin/bash
+
+######################################################
+# Section to get the current name of the host into the
+# csmake environment
+[EnvironmentCapture@get-host-name-into-env]
+env-name=BUILD-HOST-HOSTNAME
+format={hostname}
+shell_hostname=hostname
+
+###############################################################
+# Sections to create and clean the build and results directory
+[Shell@create-builddir]
+command=set -eux
+    mkdir -p %(BUILDDIR)s
+command-clean(clean, clean_build)=set -ux
+    if [ -d %(VM_MOUNT_POINT)s/home ]
+    then
+        echo "ALERT! mount point still attached"
+        echo "       build directory will not be deleted"
+    else
+        sudo rm -rf %(BUILDDIR)s/* || true
+        sudo rm -rf %(BUILDDIR)s.intermediates || true
+        rmdir -p %(BUILDDIR)s || true
+    fi
+
+[Shell@create-rawdir]
+command=set -eux
+    mkdir -p %(RAWDIR)s
+command-clean(clean, clean_build)=set -ux
+    sudo rm -rf %(RAWDIR)s/* || true
+    sudo rm -rf %(RAWDIR)s.intermediates || true
+    rmdir -p %(RAWDIR)s || true
+
+[Shell@create-resultdir]
+command=set -eux
+    mkdir -p %(RESULTDIR)s
+command-clean(clean, clean_results)=set -ux
+    sudo rm -rf %(RESULTDIR)s/* || true
+    rmdir -p %(RESULTDIR)s || true
+
+#====================================================
+#    Build entry points
+#       (defines --command entry points)
+#====================================================
+
+###########################################
+# This section defines what csmake does if
+# --command is not specified
+[command@]
+#Set the default build to do whatever you want
+description=By default, we do the 'basic-vm' command
+0000=basic-vm
+
+########################################
+# This is the actual entry point defined
+# csmake --command=basic-vm
+#   causes this command to be used for the build
+
+[&ShellAspect@basic-vm]
+command(end__build)=set -eux
+   sudo chmod 666 /dev/null
+   sudo restorecon -v /dev/null
+
+[command@basic-vm]
+description=create a basic vm
+1000=include-config, basic-vm-image-metadata
+1100=initialize-vm-image-settings, initialize-general-settings
+1200=get-host-name-into-env, hlinux-get-key
+1300=create-builddir, create-rawdir, create-resultdir
+2000=initialize-image, do-base-setup
+#This would be next if you wanted to split the hlinux debootstrap
+# and the rest of your vm build into two or more parts
+#2100=package=image
+# And you would stop here....and create a second command to complete
+#  the rest of your build
+2100=create-bootable-disk-image
+2200=create-qcow2 & create-ova-steps

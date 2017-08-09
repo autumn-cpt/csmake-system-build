@@ -1,0 +1,73 @@
+# <copyright>
+# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# </copyright>
+
+
+########################################
+# Configuration settings for the build
+
+[metadata@basic-vm-image-metadata]
+name=csmake-basic-vm
+version=0.0.0
+description=csmake Basic VM - demonstration of an easy VM build
+about=This is an example of a build that creates a simple vm in order to
+ demonstrate how to build a virtual machine in a way where you have a modular
+ and maintainable makefile.
+packager=Jeremiah Patterson
+manufacturer=Itsa VM Factory
+copyrights=vm-copyright
+keywords=example csmake vm build
+
+[copyright@vm-copyright]
+license=non-free
+holder=Itsa VM Factory
+years=2017
+
+#-----------------------------------------------
+# Settings for the current build
+#-----------------------------------------------
+[environment@initialize-general-settings]
+#Settings for getting the proper HPE gpg keys
+HLINUX_KEY_FILE=HPE-GPG-Public-Keys.tar.gz
+HLINUX_KEY_URL=https://downloads.hpe.com/pub/keys/%(HLINUX_KEY_FILE)s
+HLINUX_KEY_DIR=%(RAWDIR)s.intermediates/keys
+
+#Put any deb packages you want to start with here
+BASE_HLINUX_PACKAGES=sudo,dbus,locales,task-english,python,python3,python-dev,ca-certificates,openssl,ssl-cert,grub-pc,linux-image-amd64,linux-headers-amd64,openssh-server,lvm2
+#These are packages for CentOS6
+BASE_CENTOS_PACKAGES=sudo ca-certificates kernel-devel lvm2 openssh grub dracut
+
+#Definitions for the debootstrap and apt configuration in the image
+HLINUX_APT_SERVER=<Point to a debian url>
+HLINUX_BASE_PATH=<Provide a base path to the packages>
+HLINUX_RELEASE=<Provide a release: xenial for example>
+HLINUX_SECTIONS=main contrib non-free
+HLINUX_HOS_REPO=<Provide a repo location under base...this probably needs refactored>
+VM_MOUNT_POINT=%(BUILDDIR)s/mounts/VMprimary
+
+[environment@initialize-vm-image-settings]
+IMAGE=vm
+RAWDIR=%(RESULTS)s/builds/%(IMAGE)s-raw
+BUILDDIR=%(RESULTS)s/builds/%(IMAGE)s
+RESULTDIR=%(RESULTS)s/results/%(IMAGE)s
+ARCH=amd64
+DEFAULT_USERNAME=vmuser
+PV_SIZE=20G
+LV_SIZE=10G
+VM_DESCRIPTION=This is a simple example vm
+VM_MEMORY_SIZE=4096M
+DISK_SIZE=30G
+VM_CPU_COUNT=4

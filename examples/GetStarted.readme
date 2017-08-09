@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# <copyright>
+# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# </copyright>
+
+
+#----------------------------------------------
+#This is an executable "GetStarted" read me
+#----------------------------------------------
+#Instead of doing a bunch of boring reading on how to setup your build
+#You can simply.
+#   ./GetStarted.readme
+
+#NOTE: This README is currently a placeholder
+exit 1
+
+#PLATFORM
+#-----------
+
+
+#INSTALL BUILD TOOLS and BUILD DEPENDENCIES
+#-------------------------------------------
+#Next you need dependencies.
+#There are two scripts that are provided:
+#  - install-system-build.sh
+#  - install-csmake.sh
+
+#install-system-build.sh will install *all* system dependencies including
+#executing the install-csmake.sh script.  Simply run the install script to
+#execute the full dependency installation:
+#./install-system-build.sh
+
+#The script is idempotent, so if it fails, or you get a newer script to run
+#You can simply run the script again - obviously correcting any problems first
+
+
+#BUILD THE EXAMPLE VMs
+#-------------------------
+#Finally, you will use csmake to build your vm
+csmake
+
+#HELP
+#-------
+#csmake comes with:
+#   man csmake
+#   man csmakefile
+#   csmake --help
+#   csmake --help --verbose
+#   csmake --list-types
+#   csmake --list-commands
+#   csmake --list-phases
+#
+#Which all provide different aspects of help for understanding csmake
+#Tutorials are also available for learning how to craft csmakefiles:
+#https://github.com/jeremiahpatterson-hpe/csmake/tree/master/Tutorials
+#
+#There is also a primer available that lays out the scope and philosophy
+#of csmake a little better, here:
+#https://github.com/jeremiahpatterson-hpe/csmake
+#     THAT'S IT!
