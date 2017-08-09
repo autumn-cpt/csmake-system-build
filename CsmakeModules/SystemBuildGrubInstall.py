@@ -14,31 +14,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # </copyright>
-# <copyright>
-# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
-#
-# This program is free software: you can redistribute it and/or modify it
-# under the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
-# Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-# </copyright>
 from Csmake.CsmakeModule import CsmakeModule
 import subprocess
 import os.path
 import stat
 
 class SystemBuildGrubInstall(CsmakeModule):
-    """Purpose: Install grub on the given system
+    """Purpose: Install grub using grub2 on the given system
                 system must be mounted.
-       Library: csmake-system-build
+       Type: Module   Library: csmake-system-build
        Phases:
            build, system_build
        Options:
@@ -46,6 +30,9 @@ class SystemBuildGrubInstall(CsmakeModule):
     """
 
     REQUIRED_OPTIONS = ['system']
+
+    GRUB_OPTIONS = ['-v', '--no-floppy', '--recheck', "--modules",
+                      "biosdisk part_msdos" ]
 
     def _getEnvKey(self, system):
         return "__SystemBuild_%s__" % system
@@ -55,8 +42,7 @@ class SystemBuildGrubInstall(CsmakeModule):
 
     def _sudo_change_file_perms(self, filepath, new_perms_mask):
         ''' Use sudo to change file permissions.  Returns old permissions
-        mask.  We expect that the filepath is *inside* of a chrooted directory.
-        Note that the new_perms_mask is a string.
+        mask.  Note that the new_perms_mask is a string.
         '''
         assert(str == type(new_perms_mask))
         old_stat = os.stat(filepath)
@@ -71,7 +57,10 @@ class SystemBuildGrubInstall(CsmakeModule):
     def _edit_default_grub(self, system_partition):
         ''' Edit grub default file. Find line starting with
             "GRUB_CMDLINE_LINUX" and append to it.
+            NOTE: This is a very specific change currently
+                  The goal is to generalize this
         '''
+        old_perms = None
         try:
             grubpath = 'etc/default/grub'
             fpath = os.path.join(system_partition, grubpath)
@@ -119,91 +108,127 @@ class SystemBuildGrubInstall(CsmakeModule):
                     self.log.failed()
                     raise
 
-
-    def build(self, options):
-        # Find all mounted system partitions
-
-        taggedEnvKey = self._getEnvKey(options['system'])
+    def _getSystemBuildProperties(self, system):
+        taggedEnvKey = system
         if taggedEnvKey not in self.env.env:
-            self.log.error("System '%s' undefined", options['system'])
+            self.log.error("System '%s' undefined", taggedEnvKey)
             self.log.failed()
-            return None
-        systemEntry = self.env.env[taggedEnvKey]
-        if 'filesystem' not in systemEntry:
-            self.log.error("System '%s' has no filesystem", options['system'])
+            return False
+        self.systemEntry = self.env.env[taggedEnvKey]
+        if 'filesystem' not in self.systemEntry:
+            self.log.error("System '%s' has no filesystem", taggedEnvKey)
             self.log.failed()
-            return None
-        fsEntry = systemEntry['filesystem']
-        if 'mountInstance' not in systemEntry:
-            self.log.error("System '%s' is not mounted", options['system'])
+            return False
+        fsEntry = self.systemEntry['filesystem']
+        fsinfoEntry = self.systemEntry['filesystem-info']
+        if 'mountInstance' not in self.systemEntry:
+            self.log.error("System '%s' is not mounted", taggedEnvKey)
             self.log.failed()
-            return None
-        mountInstance = systemEntry['mountInstance']
-        systemPartition = None
-        systemDevice = None
+            return False
+        self.mountInstance = self.systemEntry['mountInstance']
+        self.systemPartition = None
+        self.systemDevice = None
+        self.systemFileSystemObject = None
         if '/boot' in fsEntry:
             mountpt, device, fstype, fstabid = fsEntry['/boot']
-            for name, value in systemEntry['disks'].iteritems():
+            for name, value in self.systemEntry['disks'].iteritems():
                 if device.startswith(value['device']):
                     if not value['real']:
                         self.log.error("/boot is not on a real disk (%s) - this is not supported", value['device'])
                         self.log.failed()
-                        return None
-                    systemDevice = value['device']
+                        return False
+                    self.systemDevice = value['device']
+                    self.systemDeviceObject = value
+                    self.systemFileSystemObject = fsEntry['/boot']
+                    self.systemDeviceInfo = fsinfoEntry['/boot']
+                    self.systemPathToSystemDevice = '/boot'
                     break
-            if systemDevice is None:
+            if self.systemDevice is None:
                 self.log.error("/boot is defined as its own filesystem on '%s', but no actual disk was found", device)
                 self.log.failed()
-                return None
+                return False
 
         if '/' not in fsEntry:
             self.log.error("There is no defined root filesystem")
             self.log.failed()
-            return None
+            return False
 
         mountpt, device, fstype, fstabid = fsEntry['/']
-        if systemDevice is None:
-            for name, value in systemEntry['disks'].iteritems():
+        self.rootTabId = fstabid
+        if self.systemDevice is None:
+            for name, value in self.systemEntry['disks'].iteritems():
                 if device.startswith(value['device']):
                     if not value['real']:
-                        self.log.error("The filesystem for system '%s' does not have a real device to target for booting", options['system'])
+                        self.log.error("The filesystem for system '%s' does not have a real device to target for booting", taggedEnvKey)
                         self.log.failed()
-                        return None
-                    systemDevice = value['device']
-        if systemDevice is None:
-            self.log.error("The filesystem for system '%s' does not have a real device to target for booting", options['system'])
+                        return False
+                    self.systemDevice = value['device']
+                    self.systemDeviceObject = value
+                    self.systemFileSystemObject = fsEntry['/']
+                    self.systemDeviceInfo = fsinfoEntry['/']
+                    self.systemPathToSystemDevice = '/'
+        if self.systemDevice is None:
+            self.log.error("The filesystem for system '%s' does not have a real device to target for booting", taggedEnvKey)
             self.log.failed()
-            return None
+            return False
 
-        systemPartition = mountInstance._systemMountLocation()
-        self.log.devdebug("systemPartition is: {0}".format(systemPartition))
+        self.systemPartition = self.mountInstance._systemMountLocation()
+        self.log.devdebug("systemPartition is: {0}".format(self.systemPartition))
+        return True
 
+    def _prepareForGrubInstall(self):
+        pass
+
+    def _cleanUpPostGrubInstall(self):
+        pass
+
+    def _generateGrubConfig(self):
         # Edit <systemPartition>/etc/default/grub to add a serial TTY console.
-        self._edit_default_grub(systemPartition)
+        self._edit_default_grub(self.systemPartition)
 
         # N.B.: 'update-grub' is simply a convenience wrapper around the command "grub-mkconfig -o /boot/grub/grub.cfg"
         result = subprocess.call(
-            ["sudo", "chroot", systemPartition, 'update-grub'],
+            ["sudo", "chroot", self.systemPartition, 'update-grub'],
             stdout=self.log.out(),
             stderr=self.log.err())
         if result != 0:
             self.log.error("update-grub failed (%d)", result)
             self.log.failed()
-            return None
+            return False
+        return True
 
+    def _callGrubInstall(self):
         # TODO: Currently this only works for ms-dos partition tables
         #      Also, assumes only MBR grub install
         #      Change it to work with GPT and UEFI as well
         result = subprocess.call(
-            ["sudo", "chroot", systemPartition,
-                "grub-install", "-v", "--no-floppy", "--recheck",
-                    "--modules", "biosdisk part_msdos",
-                    systemDevice ],
+            ["sudo", "chroot", self.systemPartition,
+                "grub-install" ] + self.GRUB_OPTIONS + [ self.systemDevice ],
             stdout=self.log.out(),
             stderr=self.log.err())
         if result != 0:
             self.log.error("grub-install failed (%d)", result)
             self.log.failed()
+            return False
+        return True
+
+    def build(self, options):
+        taggedEnvKey = self._getEnvKey(options['system'])
+        self.options = options
+
+        #Discover the system properties
+        if not self._getSystemBuildProperties(taggedEnvKey):
             return None
+
+        self._prepareForGrubInstall()
+        try:
+            if not self._generateGrubConfig():
+                return None
+
+            if not self._callGrubInstall():
+                return None
+        finally:
+            self._cleanUpPostGrubInstall()
+
         self.log.passed()
         return True

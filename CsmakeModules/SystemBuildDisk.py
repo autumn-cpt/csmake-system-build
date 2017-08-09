@@ -14,22 +14,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # </copyright>
-# <copyright>
-# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
-#
-# This program is free software: you can redistribute it and/or modify it
-# under the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
-# Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-# </copyright>
 from Csmake.CsmakeModule import CsmakeModule
 import subprocess
 import os.path
@@ -65,6 +49,9 @@ class SystemBuildDisk(CsmakeModule):
                   fstab-id: The id or device path to use
                         if the id is not a device path the type is also listed
                         e.g., "LABEL=blah"
+                  number: The presumed order of creation for the system
+                          (This may be unreliable, but required for older
+                           grub versions, e.g. 0.97)
     """
     REQUIRED_OPTIONS = ['system', 'disk-name', 'disk-file', 'size' ]
 
@@ -139,13 +126,15 @@ class SystemBuildDisk(CsmakeModule):
             self.log.failed()
             return None
         self.log.devdebug("Loopback device created: %s", device)
-        designation = "/dev/sd%s" % chr(ord('a') + len(systemEntry['disks'])-1)
+        number = len(systemEntry['disks'])
+        designation = "/dev/sd%s" % chr(ord('a') + number)
         systemEntry['disks'][diskname] = {
             'path' : diskpath,
             'real' : True,
             'size' : disksize,
             'device' : device,
-            'fstab-id' : designation }
+            'fstab-id' : designation,
+            'number' : number }
         self.diskname = diskname
         systemEntry['cleanup_methods'].append(self._cleanup)
         self.log.passed()

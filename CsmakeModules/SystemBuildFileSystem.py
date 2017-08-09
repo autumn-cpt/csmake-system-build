@@ -14,22 +14,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # </copyright>
-# <copyright>
-# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
-#
-# This program is free software: you can redistribute it and/or modify it
-# under the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
-# Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-# </copyright>
 from Csmake.CsmakeModule import CsmakeModule
 import subprocess
 
@@ -59,7 +43,14 @@ class SystemBuildFileSystem(CsmakeModule):
               'disks' and their 'partitions' will be referenced from here.
               A 'filesystem' entry is added to the system entry.
               The filesystem's structure is
-                 [ ( '<mountpoint>', '<device>', '<type>') ... ]
+                 { '<mountpoint>': 
+                   ( '<mountpoint>', '<device>', '<type>', '<fstab-id>') ... }
+              A 'filesystem-info' entry is added to the system entry as well.
+              The filesystem-info's structure is:
+                 { '<mountpoint>':
+                   { 'disk' : '<diskname>' - key to the disks table,
+                     'partition' : '<partition name>' - key to the disk's partition table, None if no partition,
+                     
     """
 
     REQUIRED_OPTIONS = ['system', '/']
@@ -83,6 +74,8 @@ class SystemBuildFileSystem(CsmakeModule):
             return None
         fsEntry = {}
         systemEntry['filesystem'] = fsEntry
+        fsinfoEntry = {}
+        systemEntry['filesystem-info'] = fsinfoEntry
         mountpts = [ x for x in options.keys() if x[0] == '/']
         mountpts.sort(key=lambda x: len(x.split('/')))
         for mountpt in mountpts:
@@ -114,6 +107,7 @@ class SystemBuildFileSystem(CsmakeModule):
                 return None
             diskEntry = systemEntry['disks'][diskname]
             device = diskEntry['device']
+            fsinfoEntry[mountpt] = { 'disk' : diskEntry, 'partition' : None }
             fslabel = diskname
             fstabTarget = diskEntry
             if partname is not None:
@@ -126,6 +120,7 @@ class SystemBuildFileSystem(CsmakeModule):
                     self.log.failed()
                     return None
                 device = partEntry[partname]['device']
+                fsinfoEntry[mountpt]['partition'] = partEntry[partname]
                 fslabel = partname
                 fstabTarget = partEntry[partname]
             subprocess.check_call(
