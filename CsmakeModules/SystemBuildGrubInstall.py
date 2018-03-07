@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -201,9 +202,15 @@ class SystemBuildGrubInstall(CsmakeModule):
         # TODO: Currently this only works for ms-dos partition tables
         #      Also, assumes only MBR grub install
         #      Change it to work with GPT and UEFI as well
+        grub_install = 'grub-install'
+        try:
+            subprocess.check_call(['sudo', 'chroot', self.systemPartition, 'which', 'grub2-install'])
+            grub_install = 'grub2-install'
+        except:
+            pass
         result = subprocess.call(
             ["sudo", "chroot", self.systemPartition,
-                "grub-install" ] + self.GRUB_OPTIONS + [ self.systemDevice ],
+                grub_install, '--target', 'i386-pc'] + self.GRUB_OPTIONS + [ self.systemDevice ],
             stdout=self.log.out(),
             stderr=self.log.err())
         if result != 0:

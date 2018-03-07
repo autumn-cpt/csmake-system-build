@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -80,6 +81,19 @@ class SystemBuildDisk(CsmakeModule):
         del systemEntry['disks'][self.diskname]
         if result != 0:
             self.log.warning("Deleting device '%s' failed", device)
+        result = subprocess.call(
+            ['cp', '--sparse=always', diskPath, diskPath + '.save'],
+            stdout=self.log.out(),
+            stderr=self.log.err())
+        if result != 0:
+            self.log.warning("Copy of device '%s' failed", device)
+        else:
+            result = subprocess.call(
+                ['mv', diskPath + '.save', diskPath],
+                stdout=self.log.out(),
+                stderr=self.log.err())
+            if result != 0:
+                self.log.warning("Move of save disk '%s' failed", device)
 
     def system_build(self, options):
         return self.build(options)

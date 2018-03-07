@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -35,7 +36,7 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                            (use '<ex>E' for an extended partition
                             msdos tables only allow 4 primary/extended
                             partitions)
-                           (start with '<ex>:<logical>L' for a partition
+                           (start with '<ex>E:<logical>L' for a partition
                             within the extended partition
                            (the logical partition numbering for logical
                             partitions will start at 5 on the system regardless
@@ -112,13 +113,17 @@ class SystemBuildMsdosPartitions(CsmakeModule):
         self, device, number, parttype, partition, start, end):
         fstype='ext2'
         callsfdisk = False
-        if partition[3] in self.PART_FSTYPES:
-            fstype = self.PART_FSTYPES[partition[3]]
+        if parttype == 'extended':
+            command_specifics = []
         else:
-            callsfdisk = True
+            if partition[3] in self.PART_FSTYPES:
+                fstype = self.PART_FSTYPES[partition[3]]
+            else:
+                callsfdisk = True
+            command_specifics = [ fstype ]
         subprocess.check_call(
             ['sudo', 'parted', '-s', '-a', 'optimal', device, '--',
-              'mkpart', parttype, fstype, "%d%%" % start, "%d%%" % end],
+              'mkpart', parttype] + command_specifics + ["%d%%" % start, "%d%%" % end],
             stdout=self.log.out(),
             stderr=self.log.err() )
         if len(partition) > 4:
@@ -242,7 +247,7 @@ class SystemBuildMsdosPartitions(CsmakeModule):
         for part in partitions:
             try:
                 if part[1][-1] == 'L':
-                    if len(part[1]) < 4 or part[1][1] != ':':
+                    if len(part[1]) < 4 or part[1][1] != 'E' or part[1][2] != ':':
                         self.log.error("The format of 'part_%s' option is incorrect", part[0])
                         self.log.error("   got: %s", part[1])
                         self.log.error("   format required: <ex>:<part>L")
