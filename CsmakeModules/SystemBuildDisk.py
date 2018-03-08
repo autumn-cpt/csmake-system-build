@@ -74,6 +74,7 @@ class SystemBuildDisk(CsmakeModule):
             return
         diskEntry = systemEntry['disks'][self.diskname]
         device = diskEntry['device']
+        diskPath = diskEntry['path']
         result = subprocess.call(
             ['sudo', 'losetup', '-d', device],
             stdout=self.log.out(),
