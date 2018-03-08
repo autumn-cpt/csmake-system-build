@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -26,26 +27,26 @@ test=Run testing for csmake
 
 [metadata@csmake-system-build]
 name=csmake-system-build
-version=1.0.13
+version=1.0.15
 description=csmake library enabling building out systems
 about=csmake library providing various modules that cooperate
  to enable the building of full compute system disks capable of
  multiple devices, partitioning, lvm, grub, etc., as well as modules
  to allow for the ability to create various kinds of vm disks and export
  types (ova).
-packager=Jeremiah Patterson <jerpat@hpe.com>
-manufacturer=Hewlett Packard Enterprise
-#Rpm support and package name translation doesn't support package logical
-#  operators (csmake:GH Issue 24, csmake-packaging:GH Issue 2)
-#  Just continue to package and support qemu-img for now...CentOS 7 is back
-#  on 1.5 ... oy vez...2.9 is out (and can be built with the csmake spec
-#  in the packaged-dependents directory)
-#depends=python (>= 2.6), csmake, qemu-img | qemu-utils, vbox-img
-depends=python (>= 2.6), csmake, qemu-img, vbox-img
+packager=Jeremiah Patterson <jerry@casecracker.com>
+manufacturer=Cardinal Peak Technologies
+#Be sure to list qemu-img first so that rpm sees it as a dependency
+#  Logical operator support is not there for rpm yet, so it takes the
+#  first listed package.
+# Ubuntu 16.04 can use qemu-utils or qemu-img because qemu-img
+#   in 16.04's qemu-utils is new enough to handle desired formats
+depends=python (>= 2.6), csmake, qemu-img | qemu-utils, vbox-img
+#depends=python (>= 2.6), csmake, qemu-img, vbox-img
 recommends=python-coverage, chrpath
 suggests=csmake-providers
 keywords=make build development system vm
-copyrights=csmake-copyright
+copyrights=csmake-copyright, csmake-cpt-copyright
 classifiers=
     Development Status :: 4 - Beta
     Intended Audience :: Developers
@@ -78,12 +79,17 @@ license=GPLv3
 holder=Hewlett Packard Enterprise
 years=2014-2017
 
+[copyright@csmake-cpt-copyright]
+license=GPLv3
+holder=Cardinal Peak Technologies
+years=2018
+
 [DebianPackage@debian-csmake]
 package-version=1.0
 default_python-script={root}/usr/bin/
 maps=csmake-installs
 result=%(RESULTS)s/debpackage
-debian-directory-copyright=csmake-copyright
+debian-directory-copyright=csmake-cpt-copyright
 
 [Signature@default-signature]
 [RpmPackage@rpm-csmake]
@@ -119,7 +125,7 @@ group_root=root
 
 map_CsmakeModules=
    map: <CsmakeModules> -(1-1)-> {PYTHON}/CsmakeSystemBuild/CsmakeModules/{~~file~~}}
-   copyright: csmake-copyright
+   copyright: csmake-copyright, csmake-cpt-copyright
    owner:{root}
    group:{root}
    permissions:644
