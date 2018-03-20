@@ -21,9 +21,6 @@ import re
 
 class SystemBuildMsdosPartitions(CsmakeModule):
     """Purpose: Set up partitions on a disk for a system build.
-           NOTE: Partitions will be top to bottom, no gaps
-                 A special module would be required to enable
-                 adding partitions to the bottom of the disk space
        Library: csmake-system-build
        Phases: build, system_build - create the file and definition
        Options:
@@ -33,6 +30,14 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                The fields for the entries are:
                    <order>, <size>, <type>[, <flags>]
                    order - position on the disk
+                           This is sorted in lexicigraphical order
+                           If you have more than 9 partitions, use
+                           01, 02, 03, ..., 10, 11, 12 to create the
+                           partitions.
+                           These labels do not dictate the actual partition
+                           numbers.  The partitions will be labeled
+                           in order based on how the partitioning scheme
+                           works.
                            (use '<ex>E' for an extended partition
                             msdos tables only allow 4 primary/extended
                             partitions)
@@ -68,6 +73,12 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                           lba - use logical block addressing
                           legacy_boot - a legacy boot parition (non-UEFI)
                           palo - ???
+       Notes:
+           - Partitions will be top to bottom, no gaps
+             A special module would be required to enable
+             adding partitions to the bottom of the disk space
+           - The first partition starts on sector 2048, which is compatible
+             with the most schemes.
        Environment:
            __SystemBuild_<system>__ is referenced - it is an error
               to not have the referenced system defined
@@ -91,11 +102,18 @@ class SystemBuildMsdosPartitions(CsmakeModule):
         'linux' : 'ext2',
         'fat16' : 'fat16',
         'fat32' : 'fat32',
+        #'vfat' : 'fat32',
         'HFS' : 'HFS',
         'NTFS' : 'NTFS',
         'linux-swap' : 'linux-swap',
         'reiserfs' : 'reiserfs',
         'ufs' : 'ufs' }
+
+    PART_TYPE = "msdos"
+    PART_PRIMARY_PARTITIONS = 4
+    PART_LOGICAL_EXTENDED_ALLOWED = True
+    #Tell parted to start on sector 2048
+    PART_FIRST_START = "2048s"
 
     def _getEnvKey(self, system):
         return "__SystemBuild_%s__" % system
@@ -108,6 +126,14 @@ class SystemBuildMsdosPartitions(CsmakeModule):
             self.log.warning("The requested partition was too small (%s), the partition has been rounded up to the next available size", size)
         return result
 
+    def _editPartitionWithSfdisk(self, device, number, partition):
+        result = subprocess.call(
+            ['sudo', 'sfdisk', '--part-type', device, "%d" % number, partition[3]],
+            stdout = self.log.out(),
+            stderr = self.log.err() )
+        if result != 0:
+            self.log.warning("Did not successfully set the requested partition type")
+        
     #Structure of the partition is name, order, size, type, flag(boot)
     def _createNextPartition(
         self, device, number, parttype, partition, start, end):
@@ -121,11 +147,19 @@ class SystemBuildMsdosPartitions(CsmakeModule):
             else:
                 callsfdisk = True
             command_specifics = [ fstype ]
+        if start == 0:
+            startstr = self.PART_FIRST_START
+        else:
+            startstr = "%s%%" % start
         subprocess.check_call(
             ['sudo', 'parted', '-s', '-a', 'optimal', device, '--',
-              'mkpart', parttype] + command_specifics + ["%d%%" % start, "%d%%" % end],
+              'mkpart', parttype] + command_specifics + [startstr, "%d%%" % end],
             stdout=self.log.out(),
             stderr=self.log.err() )
+        subprocess.call(
+            ['sudo', 'parted', '-s', device, '--', 'name', '%d' % number, partition[0]],
+            stdout = self.log.out(),
+            stderr = self.log.err())
         if len(partition) > 4:
             for flag in partition[4:]:
                 subprocess.check_call(
@@ -134,19 +168,14 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                     stdout = self.log.out(),
                     stderr = self.log.err())
         if callsfdisk:
-            result = subprocess.call(
-                ['sudo', 'sfdisk', '--part-type', device, "%d" % number, partition[3]],
-                stdout = self.log.out(),
-                stderr = self.log.err() )
-            if result != 0:
-                self.log.warning("Did not successfully set the requested partition type")
+            self._editPartitionWithSfdisk(device, number, partition)
 
     def _createPrimaryPartition(self, device, number, partition):
         requestedPercent = self._getRequestedPercentage(partition[2])
         start = self.startPercent
         end = start + requestedPercent
         if end > 100:
-            self.log.warning("Primary partition was truncated, %d%% beyond the end of the disk", 100-end)
+            self.log.warning("Primary partition was truncated, %d%% beyond the end of the disk", end-100)
             end = 100
         self._createNextPartition(
             device, number, 'primary', partition, start, end)
@@ -179,15 +208,26 @@ class SystemBuildMsdosPartitions(CsmakeModule):
         self.extensionStart = end
 
     def _createPartitionEntry(self, part, number, device, diskFstabId, partFstabId=None):
+        fulldevstring = device
+        fullpartid = diskFstabId
+        if number > 0:
+            partsep = ''
+            if 'loop' in device:
+                partsep = 'p'
+            fulldevstring = "%s%s%d" % (device, partsep, number)
+            partsep = ''
+            if 'loop' in diskFstabId:
+                partsep = 'p'
+            fullpartid = "%s%s%d" % (diskFstabId, partsep, number)
         if partFstabId is None:
             if '=' not in diskFstabId:
-                partFstabId = "%sp%d" % (diskFstabId, number)
+                partFstabId = fullpartid
             #TODO: What if the disk has an identifier, but nothing for the
             #      partition - then what???
         self.partEntry[part[0]] = {
             'number' : number,
             'size' : part[2],
-            'device' : "%sp%d" % (device, number),
+            'device' : fulldevstring,
             'fstab-id' : partFstabId }
 
     def system_build(self, options):
@@ -214,15 +254,15 @@ class SystemBuildMsdosPartitions(CsmakeModule):
         self.partEntry = diskEntry['partitions']
         partitions=[]
         subprocess.check_call(
-            ['sudo', 'parted', '-s', diskEntry['device'], '--', 'mklabel', 'msdos'],
+            ['sudo', 'parted', '-s', diskEntry['device'], '--', 'mklabel', self.PART_TYPE],
             stdout=self.log.out(),
             stderr=self.log.err())
 
         #Get the sizes ready for creating partitions
         self.systemInstance = systemEntry['system']
         #parted on 14.04 is stupid...starting at 0 causes it to make a 1M
-        #  partition...so
-        self.startPercent = 1
+        #  partition...so what we do is start it at sector 2048
+        self.startPercent = 0
         self.disksize = diskEntry['size']
         self.extensionStart = -1
         self.extensionEnd= -1
@@ -247,6 +287,10 @@ class SystemBuildMsdosPartitions(CsmakeModule):
         for part in partitions:
             try:
                 if part[1][-1] == 'L':
+                    if not self.PART_LOGICAL_EXTENDED_ALLOWED:
+                        self.log.error("Logical volumes are not allowed with type '%s'", self.PART_TYPE)
+                        self.log.failed()
+                        return None
                     if len(part[1]) < 4 or part[1][1] != 'E' or part[1][2] != ':':
                         self.log.error("The format of 'part_%s' option is incorrect", part[0])
                         self.log.error("   got: %s", part[1])
@@ -266,8 +310,12 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                     logical += 1
 
                 elif part[1][-1] == 'E':
-                    if primary > 4:
-                        self.log.error("msdos (MBR) partition tables may only have 4 primary and extended partitions")
+                    if not self.PART_LOGICAL_EXTENDED_ALLOWED:
+                        self.log.error("Logical volumes are not allowed with type '%s'", self.PART_TYPE)
+                        self.log.failed()
+                        return None
+                    if primary > self.PART_PRIMARY_PARTITIONS:
+                        self.log.error("%s partition tables may only have 4 primary and extended partitions", self.PART_TYPE)
                         self.log.error("   However, part_%s defines a 5th partition", part[0])
                         self.log.failed()
                         return None
@@ -296,8 +344,8 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                     primary += 1
 
                 else:
-                    if primary > 4:
-                        self.log.error("msdos (MBR) partition tables may only have 4 primary and extended sections")
+                    if primary > self.PART_PRIMARY_PARTITIONS:
+                        self.log.error("%s partition tables may only have 4 primary and extended sections", self.PART_TYPE)
                         self.log.error("   However, part_%s defines a 5th partition", part[0])
                         self.log.failed()
                         return None

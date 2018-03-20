@@ -32,6 +32,7 @@ class SystemBuildGrubInstall(CsmakeModule):
 
     REQUIRED_OPTIONS = ['system']
 
+    GRUB_TARGET_OPTION = ['--target', 'i386-pc']
     GRUB_OPTIONS = ['-v', '--no-floppy', '--recheck', "--modules",
                       "biosdisk part_msdos" ]
 
@@ -210,7 +211,7 @@ class SystemBuildGrubInstall(CsmakeModule):
             pass
         result = subprocess.call(
             ["sudo", "chroot", self.systemPartition,
-                grub_install, '--target', 'i386-pc'] + self.GRUB_OPTIONS + [ self.systemDevice ],
+                grub_install ] + self.GRUB_TARGET_OPTION + self.GRUB_OPTIONS + [ self.systemDevice ],
             stdout=self.log.out(),
             stderr=self.log.err())
         if result != 0:

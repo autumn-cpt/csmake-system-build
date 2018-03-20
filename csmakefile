@@ -27,7 +27,7 @@ test=Run testing for csmake
 
 [metadata@csmake-system-build]
 name=csmake-system-build
-version=1.0.15
+version=1.0.16
 description=csmake library enabling building out systems
 about=csmake library providing various modules that cooperate
  to enable the building of full compute system disks capable of
@@ -43,7 +43,7 @@ manufacturer=Cardinal Peak Technologies
 #   in 16.04's qemu-utils is new enough to handle desired formats
 depends=python (>= 2.6), csmake, qemu-img | qemu-utils, vbox-img
 #depends=python (>= 2.6), csmake, qemu-img, vbox-img
-recommends=python-coverage, chrpath
+recommends=util-linux, gdisk
 suggests=csmake-providers
 keywords=make build development system vm
 copyrights=csmake-copyright, csmake-cpt-copyright

@@ -24,7 +24,7 @@ class ConvertVirtualImage(CsmakeModule):
     """Purpose: Convert a virtual disk image to a different format
        Library: csmake-system-build
        Phases:
-           build
+           build, package_vm
        Options:
            extra - extra options to pass to the underlying tool
                    Default is nothing
@@ -54,6 +54,9 @@ class ConvertVirtualImage(CsmakeModule):
     def _checkAndCleanImage(self, toImage):
         if os.path.exists(toImage):
             os.remove(toImage)
+
+    def package_vm(self, options):
+        return self.build
 
     def build(self, options):
         if 'tool' in options:

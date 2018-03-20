@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -27,14 +28,14 @@ class CreateOVA(CsmakeModule):
            NOTE: This module currently generates a specific kind of OVA
                  Only a few basic knobs are available for configuration
                  out of the myriad knobs that could be provided
-                 The OS is fixed at Debian 64-bit
                  The advice of the ovf says the disk is the capacity
                  presented in the flags, but the image is already created
            The current active metadata will be used to provide
               product information.
            This module requires the definition of product metadata for use
        Library: csmake-system-build
-       Phases: build, clean
+       Phases: build, package_vm - create the ova
+               clean          - delete the ova
        Flags:
            vm-name: The name to give to the virtual machine
            vm-description: A description of the virtual machine
@@ -45,6 +46,8 @@ class CreateOVA(CsmakeModule):
            os-description: Description of operating system
            manifest-format: (OPTIONAL) sha1 default, sha256 is also available
                             vCenter 6.5 wants sha256.
+           firmware: (OPTIONAL) may be either 'bios' or 'efi'
+                     DEFAULT: bios
            disk-format-<intent>: The disk format in the file mappings
                           will map to <intent>
            disk-capacity-<intent>: The intents in the file mappings
@@ -584,8 +587,20 @@ class CreateOVA(CsmakeModule):
             filename,
             digest)
 
+    def package_vm(self, options):
+        return self.build(options)
+
     def build(self, options):
         self.options = options
+        self.firmware = 'bios'
+        if 'firmware' in self.options:
+            fmat = options['firmware'].lower()
+            if fmat == 'bios' or fmat == 'efi':
+                self.firmware = fmat
+            else:
+                self.log.error("Unknown 'firmware': %s", fmat)
+                self.log.failed()
+                return None
         self.digestFormat = hashlib.sha1
         self.digestFormatString = "SHA1"
         if 'manifest-format' in options:
