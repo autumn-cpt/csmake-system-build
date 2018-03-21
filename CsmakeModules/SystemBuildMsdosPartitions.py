@@ -56,7 +56,7 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                               linux - a linux partition
                               linux-swap - linux swap partition
                               fat16 - an old windows partition
-                              fat32 - a vfat windows partition
+                              vfat, fat32 - a vfat windows partition
                               HFS - an HFS parition
                               NTFS - an NTFS partition
 
@@ -102,7 +102,7 @@ class SystemBuildMsdosPartitions(CsmakeModule):
         'linux' : 'ext2',
         'fat16' : 'fat16',
         'fat32' : 'fat32',
-        #'vfat' : 'fat32',
+        'vfat' : 'fat32',
         'HFS' : 'HFS',
         'NTFS' : 'NTFS',
         'linux-swap' : 'linux-swap',

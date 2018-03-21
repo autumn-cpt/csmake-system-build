@@ -25,14 +25,6 @@ import hashlib
 
 class CreateOVA(CsmakeModule):
     """Purpose: To create an ovf/ova out of the provided disk(s)
-           NOTE: This module currently generates a specific kind of OVA
-                 Only a few basic knobs are available for configuration
-                 out of the myriad knobs that could be provided
-                 The advice of the ovf says the disk is the capacity
-                 presented in the flags, but the image is already created
-           The current active metadata will be used to provide
-              product information.
-           This module requires the definition of product metadata for use
        Library: csmake-system-build
        Phases: build, package_vm - create the ova
                clean          - delete the ova
@@ -45,19 +37,19 @@ class CreateOVA(CsmakeModule):
            os: Type of operating system
            os-description: Description of operating system
            manifest-format: (OPTIONAL) sha1 default, sha256 is also available
-                            vCenter 6.5 wants sha256.
+                     NOTE: vCenter 6.5 wants sha256.
            firmware: (OPTIONAL) may be either 'bios' or 'efi'
                      DEFAULT: bios
+                     NOTE: VirtualBox doesn't pick up this hint.
            disk-format-<intent>: The disk format in the file mappings
                           will map to <intent>
            disk-capacity-<intent>: The intents in the file mappings
                           will map to <intent> (capacity in GB)
                Note: Disks will be flagged 'sparse' so they will
-                     not use to their capacity.
-               Note Also: This is currently being ignored - technically
-                          this should be driven by the image creation and
-                          data fed in here.
+                     not allocate their entire capacity on the build.
            add-cd-dvd-rom: True or False; add a CD/DVD ROM drive to the VM
+           disk-controller: (OPTIONAL) type of disk controller to use:
+               SATA or SCSI  (Default: SCSI)
        Maps:
            Expects a 1-1 or *-1 mapping where files as disks are
            mapped into the ova and called out as disks in the
@@ -67,6 +59,15 @@ class CreateOVA(CsmakeModule):
            duplicated, i.e., two disk images supplied have
            the 'appliance' intent, then they will both receive
            the same capacity.  See flag disk-capacity-<intent>
+       Notes:
+           This module currently generates a specific kind of OVA
+              to support use with vmware products - however the ovas tend
+              to also work in Virtual Box.
+           Only a few basic knobs are available for configuration
+              out of the myriad knobs that could be provided
+           This module requires a 'metadata' section
+           The disk controller type may require a change to the vmdk ddb
+              for vmware compatibility (See: ModifyVmdkDDB module)
     """
     # Takes: (UTCTime,)
     OVF_HEADER = """<?xml version="1.0" encoding="UTF-8"?>
@@ -400,7 +401,7 @@ class CreateOVA(CsmakeModule):
           '<Item>',
           '  <rasd:Address>%s</rasd:Address>' % address,
           '  <rasd:Description>SCSI Controller</rasd:Description>',
-          '  <rasd:ElementName>SCSI Controller 0</rasd:ElementName>',
+          '  <rasd:ElementName>SCSI Controller %s</rasd:ElementName>' % address,
           '  <rasd:InstanceID>%s</rasd:InstanceID>' % instanceId,
           '  <rasd:ResourceSubType>lsilogic</rasd:ResourceSubType>',
           '  <rasd:ResourceType>6</rasd:ResourceType>',
@@ -415,6 +416,18 @@ class CreateOVA(CsmakeModule):
           '  <rasd:ElementName>VirtualIDEController %s</rasd:ElementName>' % address,
           '  <rasd:InstanceID>%s</rasd:InstanceID>' % instanceId,
           '  <rasd:ResourceType>5</rasd:ResourceType>',
+          '</Item>' ]
+        return resultxml
+
+    def _generateSATAController(self, address, instanceId):
+        resultxml = [
+          '<Item>',
+          '  <rasd:Address>%s</rasd:Address>' % address,
+          '  <rasd:Description>SATA Controller</rasd:Description>',
+          '  <rasd:ElementName>SATA Controller %s</rasd:ElementName>' % address,
+          '  <rasd:InstanceID>%s</rasd:InstanceID>' % instanceId,
+          '  <rasd:ResourceSubType>AHCI</rasd:ResourceSubType>',
+          '  <rasd:ResourceType>20</rasd:ResourceType>',
           '</Item>' ]
         return resultxml
 
@@ -482,7 +495,7 @@ class CreateOVA(CsmakeModule):
         resultxml = [
           '<vmw:Config ovf:required="false" vmw:key="cpuHotAddEnabled" vmw:value="false"/>',
           '<vmw:Config ovf:required="false" vmw:key="cpuHotRemoveEnabled" vmw:value="false"/>',
-          '<vmw:Config ovf:required="false" vmw:key="firmware" vmw:value="bios"/>',
+          '<vmw:Config ovf:required="false" vmw:key="firmware" vmw:value="%s"/>' % self.firmware,
           '<vmw:Config ovf:required="false" vmw:key="virtualICH7MPresent" vmw:value="false"/>',
           '<vmw:Config ovf:required="false" vmw:key="virtualSMCPresent" vmw:value="false"/>',
           '<vmw:Config ovf:required="false" vmw:key="memoryHotAddEnabled" vmw:value="false"/>',
@@ -516,7 +529,15 @@ class CreateOVA(CsmakeModule):
         instanceId += 1
         self._appendXml(2, resultxml, self._generateMemory(instanceId))
         instanceId += 1
-        self._appendXml(2, resultxml, self._generateSCSIController(0, instanceId))
+        controller = "SCSI"
+        if "disk-controller" in self.options:
+            controller = self.options['disk-controller'].upper()
+        if controller not in ["SATA", "SCSI"]:
+            self.log.error("disk-controller '%s' unknown", controller)
+        if controller == "SATA":
+            self._appendXml(2, resultxml, self._generateSATAController(0, instanceId))
+        else:
+            self._appendXml(2, resultxml, self._generateSCSIController(0, instanceId))
         diskParent = instanceId
         instanceId += 1
         # We cannot simply remove IDE controllers since we need a virtual CD/DVD, but we only need one controller.
