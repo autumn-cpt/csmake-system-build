@@ -78,9 +78,18 @@ class SystemBuildFileSystem(CsmakeModule):
         systemEntry['filesystem-info'] = fsinfoEntry
         mountpts = [ x for x in options.keys() if x[0] == '/']
         mountpts.sort(key=lambda x: len(x.split('/')))
+        fsoptions = []
         for mountpt in mountpts:
             try:
-                csmakedevice, fstype = options[mountpt].split(',',1)
+                parts = options[mountpt].split(',')
+                if len(parts) == 2:
+                    csmakedevice, fstype = parts
+                    fsoptions = []
+                elif len(parts) == 3:
+                    csmakedevice, fstype, fsoptions = parts
+                    fsoptions = fsoptions.split()
+                else:
+                    raise ValueError("Incorrect parameters to fstype")
             except ValueError as e:
                 self.log.error(
                     "Filesystem spec was invalid (%s): '%s=%s'",
@@ -124,7 +133,7 @@ class SystemBuildFileSystem(CsmakeModule):
                 fslabel = partname
                 fstabTarget = partEntry[partname]
             subprocess.check_call(
-                ['sudo', 'mkfs', '-t', fstype, device],
+                ['sudo', 'mkfs', '-t', fstype] + fsoptions + [device],
                 stdout = self.log.out(),
                 stderr = self.log.err() )
 
