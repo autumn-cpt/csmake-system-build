@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -145,8 +146,9 @@ class SystemBuildFileSystem(CsmakeModule):
                 labeler = "_labelFileSystem_%s" % fstype
                 if hasattr(self, labeler):
                     try:
-                        if getattr(self, labeler)(fslabel, device):
-                            fstabTarget['fstab-id'] = "LABEL=%s" % fslabel
+                        newlabel = getattr(self, labeler)(fslabel, device)
+                        if newlabel is not None:
+                            fstabTarget['fstab-id'] = "LABEL=%s" % newlabel
                         else:
                             self.log.warning("Failed to label filesystem - the booted image may not be able to find: %s", mountpt)
                     except:
@@ -169,21 +171,22 @@ class SystemBuildFileSystem(CsmakeModule):
             ['sudo', 'e2label', device, fslabel],
             stdout=self.log.out(),
             stderr=self.log.err() )
-        return True
+        return fslabel
 
     def _labelFileSystem_btrfs(self, fslabel, device):
         subprocess.check_call(
             ['sudo', 'btrfs', 'filesystem', 'label', device, fslabel],
             stdout=self.log.out(),
             stderr=self.log.err() )
-        return True
+        return fslabel
 
     def _labelFileSystem_vfat(self, fslabel, device):
+        fslabel = fslabel[:min(len(fslabel),11)].upper()
         subprocess.check_call(
-            ['sudo', 'mlabel', '-csn', '-i', device, "::%s" % fslabel],
+            ['sudo', 'fatlabel', device, fslabel],
             stdout=self.log.out(),
             stderr=self.log.err() )
-        return True
+        return fslabel
     def _labelFileSystem_fat(self, fslabel, device):
         return self._labelFileSystem_vfat(fslabel, device)
 
@@ -192,18 +195,18 @@ class SystemBuildFileSystem(CsmakeModule):
             ['sudo', 'ntfslabel', device, fslabel],
             stdout=self.log.out(),
             stderr=self.log.err())
-        return True
+        return fslabel
 
     def _labelFileSystem_jfs(self, fslabel, device):
         subprocess.check_call(
             ['sudo', 'jfs_tune', '-L', fslabel, device],
             stdout=self.log.out(),
             stderr=self.log.err())
-        return True
+        return fslabel
 
     def _labelFileSystem_xfs(self, fslabel, device):
         subprocess.check_call(
             ['sudo', 'xfs_admin', '-L', fslabel, device],
             stdout=self.log.out(),
             stderr=self.log.err())
-        return True
+        return fslabel

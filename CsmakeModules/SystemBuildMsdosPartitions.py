@@ -92,6 +92,9 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                  size - the size of the partition
                  device - the full device (current device)
                  fstab-id - the fstab-id to use, e.g. LABEL="blah"
+              also a 'swaps' entry will be added to the disk's dictionary
+                 this will list the access information for any swap partitions
+                 the structure of swaps is [(label, partition dictionary)...]
        Requires: parted and sfdisk
     """
 
@@ -169,6 +172,8 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                     stderr = self.log.err())
         if callsfdisk:
             self._editPartitionWithSfdisk(device, number, partition)
+        if fstype == 'linux-swap':
+            self.swaps.append((device, number, partition))
 
     def _createPrimaryPartition(self, device, number, partition):
         requestedPercent = self._getRequestedPercentage(partition[2])
@@ -233,6 +238,7 @@ class SystemBuildMsdosPartitions(CsmakeModule):
     def system_build(self, options):
         return self.build(options)
     def build(self, options):
+        self.swaps = []
         system = options['system']
         diskname = options['disk-name']
         key = self._getEnvKey(system)
@@ -251,6 +257,7 @@ class SystemBuildMsdosPartitions(CsmakeModule):
             self.log.failed()
             return None
         diskEntry['partitions'] = {}
+        diskEntry['swaps'] = []
         self.partEntry = diskEntry['partitions']
         partitions=[]
         subprocess.check_call(
@@ -379,6 +386,19 @@ class SystemBuildMsdosPartitions(CsmakeModule):
             stderr=self.log.err())
         if result != 0:
             self.log.warning("settle failed")
+        for partdev, partnum, partpartition in self.swaps:
+            try:
+                subprocess.check_call(
+                    ['sudo', 'mkswap', '-L',
+                       partpartition[0],
+                       self.partEntry[partpartition[0]]['device']],
+                    stdout=self.log.out(),
+                    stderr=self.log.err())
+                self.partEntry[partpartition[0]]['fstab-id'] = 'LABEL=%s' % partpartition[0]
+                diskEntry['swaps'].append((partpartition[0], self.partEntry[partpartition[0]]))
+            except:
+                self.log.exception("The swap, '%s', could not be initialized", partpartition[0])
+
 
         self.log.passed()
         return self.partEntry

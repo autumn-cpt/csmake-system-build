@@ -27,7 +27,7 @@ test=Run testing for csmake
 
 [metadata@csmake-system-build]
 name=csmake-system-build
-version=1.0.16
+version=1.0.17
 description=csmake library enabling building out systems
 about=csmake library providing various modules that cooperate
  to enable the building of full compute system disks capable of
