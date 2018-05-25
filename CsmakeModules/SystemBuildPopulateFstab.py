@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -70,6 +71,12 @@ class SystemBuildPopulateFstab(CsmakeModule):
                 "noatime,errors=remount-ro",
                 0,
                 1 ) )
+        swappts = []
+        for disk in systemEntry['disks'].values():
+            if 'swaps' in disk:
+                swappts.extend(disk['swaps'])
+        for swaplabel, swappart in swappts:
+            lines.append("%s\tswap\tswap\tdefaults\t0\t0\n" % swappart['fstab-id'])
         templocation = os.path.join(
             self.env.env['RESULTS'],
             'temp_etc_fstab')
