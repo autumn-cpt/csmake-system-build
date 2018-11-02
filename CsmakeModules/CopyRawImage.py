@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -30,7 +31,11 @@ class CopyRawImage(CsmakeModule):
        Mappings:  Directories on the left will be placed to the right
                   An empty mapping will fail - it is assumed that
                   this section is required to do *something*
-       Options: None
+       Options:
+           preserve: (OPTIONAL) comma separated list of attributes to
+                  preserve.  Attributes can be mode, ownership, timestamps
+                                               context, links, xattr, all
+                  Default: all
     """
 
     def build(self, options):
@@ -38,6 +43,9 @@ class CopyRawImage(CsmakeModule):
             self.log.error("Nothing specified to copy")
             self.log.failed()
             return None
+        attributes = '-a'
+        if 'preserve' in options:
+            attributes = '-dR --preserve={}'.format(options['preserve'].strip().replace(' ',''))
         for froms, tos in self.mapping.iterfiles():
             for source in froms:
                 for destination in tos:
@@ -59,8 +67,9 @@ class CopyRawImage(CsmakeModule):
                     if copyImage:
                         self.log.info("Copying %s to %s", source, destination)
                         result = subprocess.call(
-                            'sudo cp -t %s -a %s/*' % (
+                            'sudo cp -t %s %s %s/*' % (
                                 destination,
+                                attributes,
                                 source ),
                             stdout=self.log.out(),
                             stderr=self.log.err(),
