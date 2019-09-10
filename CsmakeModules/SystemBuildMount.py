@@ -469,7 +469,7 @@ class SystemBuildMount(CsmakeAspect):
             self.log.failed()
 
     def start__system_build(self, phase, options, step, stepoptions):
-        return self.start__build(self, phase, options, step, stepoptions)
+        return self.start__build(phase, options, step, stepoptions)
     def start__build(self, phase, options, step, stepoptions):
         self.options = options
         if not self._initModule():
@@ -481,7 +481,7 @@ class SystemBuildMount(CsmakeAspect):
             self.log.failed()
 
     def end__system_build(self, phase, options, step, stepoptions):
-        return end__system_build(self, phase, options, step, stepoptions)
+        return self.end__build(phase, options, step, stepoptions)
     def end__build(self, phase, options, step, stepoptions):
         self._cleanUpMounts()
         self.log.passed()
