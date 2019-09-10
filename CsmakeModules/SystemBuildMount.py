@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2019 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -468,7 +469,7 @@ class SystemBuildMount(CsmakeAspect):
             self.log.failed()
 
     def start__system_build(self, phase, options, step, stepoptions):
-        return start__build(self, phase, options, step, stepoptions)
+        return self.start__build(self, phase, options, step, stepoptions)
     def start__build(self, phase, options, step, stepoptions):
         self.options = options
         if not self._initModule():
