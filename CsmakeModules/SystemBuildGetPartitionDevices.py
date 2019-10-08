@@ -1,4 +1,5 @@
 #<copyright>
+# (c) Copyright 2019 Autumn Samantha Jeremiah Patterson
 # (c) Copyright 2018 Cardinal Peak Technologies
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -21,7 +22,8 @@ class SystemBuildGetPartitionDevices(CsmakeAspect):
        Library: csmake-system-build
        Notes: This must be used while a SystemBuildMount is in effect
        JoinPoints:
-           start__build, start__system_build - Define devices in environment
+           start__build, start__system_build, start__use_system_build
+                - Define devices in environment
            start - Define unknown into environment
            end - Undefine environment variables
        Options:
@@ -78,6 +80,9 @@ class SystemBuildGetPartitionDevices(CsmakeAspect):
 
     def end__system_build(self, phase, options, step, stepoptions):
         return self.end(phase, options, step, stepoptions)
+
+    def end__use_system_build(self, phase, options, step, stepoptions):
+        return self.end(phase, options, step, stepoptions)
         
     def start__build(self, phase, options, step, stepoptions):
         self.options = options
@@ -105,5 +110,8 @@ class SystemBuildGetPartitionDevices(CsmakeAspect):
         return None
 
     def start__system_build(self, phase, options, step, stepoptions):
-        return self.start__build(phase, options, step, steoptions)
+        return self.start__build(phase, options, step, stepoptions)
+
+    def start__use_system_build(self, phase, options, step, stepoptions):
+        return self.start__build(phase, options, step, stepoptions)
 

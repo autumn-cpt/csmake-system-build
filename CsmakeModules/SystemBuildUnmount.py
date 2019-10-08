@@ -25,13 +25,15 @@ class SystemBuildUnmount(CsmakeModule):
        Options:
            system - The system to unmount
        Phases:
-           build, system_build
+           build, system_build, use_system_build
     """
     REQUIRED_OPTIONS = ['system']
 
     def _getEnvKey(self, system):
         return '__SystemBuild_%s__' % system
 
+    def use_system_build(self, options):
+        self.build(options)
     def system_build(self, options):
         self.build(options)
     def build(self, options):

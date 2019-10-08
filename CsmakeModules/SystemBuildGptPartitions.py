@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2019 Autumn Samantha Jeremiah Patterson
 # (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
@@ -24,7 +25,8 @@ class SystemBuildGptPartitions(SystemBuildMsdosPartitions):
                  A special module would be required to enable
                  adding partitions to the bottom of the disk space
        Library: csmake-system-build
-       Phases: build, system_build - create the file and definition
+       Phases: build, system_build, use_system_build
+           create the file and definition
        Options:
            system - Name of the system to add partitions to
            disk-name - Name of the disk to partition
