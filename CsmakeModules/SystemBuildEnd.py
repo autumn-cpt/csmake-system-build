@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2019 Autumn Samantha Jeremiah Patterson
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -26,13 +27,15 @@ class SystemBuildEnd(CsmakeModule):
        Options:
            system - The system to end building
        Phases:
-           build, system_build
+           build, system_build, use_system_build
     """
     REQUIRED_OPTIONS = ['system']
 
     def _getEnvKey(self, system):
         return '__SystemBuild_%s__' % system
 
+    def use_system_build(self, options):
+        self.build(options)
     def system_build(self, options):
         self.build(options)
     def build(self, options):

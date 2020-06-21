@@ -1,5 +1,5 @@
 # <copyright>
-# (c) Copyright 2018 Cardinal Peak Technologies
+# (c) Copyright 2018-2019 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -27,7 +27,7 @@ test=Run testing for csmake
 
 [metadata@csmake-system-build]
 name=csmake-system-build
-version=1.0.18
+version=1.0.25
 description=csmake library enabling building out systems
 about=csmake library providing various modules that cooperate
  to enable the building of full compute system disks capable of
@@ -82,7 +82,7 @@ years=2014-2017
 [copyright@csmake-cpt-copyright]
 license=GPLv3
 holder=Cardinal Peak Technologies
-years=2018
+years=2018-2019
 
 [DebianPackage@debian-csmake]
 package-version=1.0

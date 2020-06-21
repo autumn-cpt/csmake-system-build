@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2019 Autumn Samantha Jeremiah Patterson
 # (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
@@ -25,6 +26,7 @@ class SystemBuildDisk(CsmakeModule):
        Library: csmake-system-build
        Phases: build, system_build - create the file and definition
                clean, clean_build - delete the disk-file
+               use_system_build - use the created file and definition
        Options:
            system - Name of the system to add the disk to
            disk-name - Name of the disk to add
@@ -60,6 +62,10 @@ class SystemBuildDisk(CsmakeModule):
         return '__SystemBuild_%s__' % system
 
     def _cleanup(self):
+        self._cleanupUse()
+        self._cleanupCreate()
+
+    def _cleanupUse(self):
         key = self._getEnvKey(self.system)
         if key not in self.env.env:
             self.log.info("System '%s' is not defined", self.system)
@@ -83,6 +89,29 @@ class SystemBuildDisk(CsmakeModule):
         if result != 0:
             self.log.warning("Deleting device '%s' failed", device)
         result = subprocess.call(
+            ['sudo', 'ioctl', device, '19457'],
+            stdout=self.log.out(),
+            stderr=self.log.err())
+        if result != 0:
+            self.log.warning("Detaching lo device '%' failed", device)
+
+    def _cleanupCreate(self):
+        key = self._getEnvKey(self.system)
+        if key not in self.env.env:
+            self.log.info("System '%s' is not defined", self.system)
+            return
+        systemEntry = self.env.env[key]
+        if 'disks' not in systemEntry or \
+            self.diskname not in systemEntry['disks']:
+            self.log.info(
+                "Disk '%s' is not defined in system '%s'",
+                self.diskname,
+                self.system )
+            return
+        diskEntry = systemEntry['disks'][self.diskname]
+        device = diskEntry['device']
+        diskPath = diskEntry['path']
+        result = subprocess.call(
             ['cp', '--sparse=always', diskPath, diskPath + '.save'],
             stdout=self.log.out(),
             stderr=self.log.err())
@@ -100,6 +129,12 @@ class SystemBuildDisk(CsmakeModule):
         return self.build(options)
 
     def build(self, options):
+        return self._setupDisk(options, True)
+
+    def use_system_build(self, options):
+        return self._setupDisk(options, False)
+
+    def _setupDisk(self, options, build):
         system = options['system']
         self.system = system
         key = self._getEnvKey(system)
@@ -119,18 +154,19 @@ class SystemBuildDisk(CsmakeModule):
             self.log.failed()
             return None
         diskpath = options['disk-file']
-        if os.path.exists(diskpath):
-            self.log.warning("A file exists at '%s' for the disk already, removing", diskpath)
-            os.remove(diskpath)
         disksize = systemEntry['system']._getSizeInBytes(options['size'])
-        result = subprocess.call(
-            ['truncate', '-s', options['size'], diskpath],
-            stdout = self.log.out(),
-            stderr = self.log.err() )
-        if result != 0:
-            self.log.error("Creating the disk file failed")
-            self.log.failed()
-            return None
+        if build:
+            if os.path.exists(diskpath):
+                self.log.warning("A file exists at '%s' for the disk already, removing", diskpath)
+                os.remove(diskpath)
+            result = subprocess.call(
+                ['truncate', '-s', options['size'], diskpath],
+                stdout = self.log.out(),
+                stderr = self.log.err() )
+            if result != 0:
+                self.log.error("Creating the disk file failed")
+                self.log.failed()
+                return None
         #Create the lo device.
         try:
             device = subprocess.check_output(
@@ -151,7 +187,10 @@ class SystemBuildDisk(CsmakeModule):
             'fstab-id' : designation,
             'number' : number }
         self.diskname = diskname
-        systemEntry['cleanup_methods'].append(self._cleanup)
+        if build:
+            systemEntry['cleanup_methods'].append(self._cleanup)
+        else:
+            systemEntry['cleanup_methods'].append(self._cleanupUse)
         self.log.passed()
         return systemEntry['disks'][diskname]
 

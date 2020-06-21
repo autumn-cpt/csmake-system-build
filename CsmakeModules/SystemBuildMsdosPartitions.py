@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2019 Autumn Samantha Jeremiah Pattersosn
 # (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
@@ -23,6 +24,7 @@ class SystemBuildMsdosPartitions(CsmakeModule):
     """Purpose: Set up partitions on a disk for a system build.
        Library: csmake-system-build
        Phases: build, system_build - create the file and definition
+           use_system_build - reuse the created partitions
        Options:
            system - Name of the system to add partitions to
            disk-name - Name of the disk to partition
@@ -238,6 +240,11 @@ class SystemBuildMsdosPartitions(CsmakeModule):
     def system_build(self, options):
         return self.build(options)
     def build(self, options):
+        return self._doPartitioning(options, True)
+    def use_system_build(self, options):
+        return self._doPartitioning(options, False)
+
+    def _doPartitioning(self, options, build):
         self.swaps = []
         system = options['system']
         diskname = options['disk-name']
@@ -260,14 +267,15 @@ class SystemBuildMsdosPartitions(CsmakeModule):
         diskEntry['swaps'] = []
         self.partEntry = diskEntry['partitions']
         partitions=[]
-        subprocess.check_call(
-            ['sudo', 'parted', '-s', diskEntry['device'], '--', 'mklabel', self.PART_TYPE],
-            stdout=self.log.out(),
-            stderr=self.log.err())
+        if build:
+            subprocess.check_call(
+                ['sudo', 'parted', '-s', diskEntry['device'], '--', 'mklabel', self.PART_TYPE],
+                stdout=self.log.out(),
+                stderr=self.log.err())
 
         #Get the sizes ready for creating partitions
         self.systemInstance = systemEntry['system']
-        #parted on 14.04 is stupid...starting at 0 causes it to make a 1M
+        #parted on ubuntu14.04 is stupid...starting at 0 causes it to make a 1M
         #  partition...so what we do is start it at sector 2048
         self.startPercent = 0
         self.disksize = diskEntry['size']
@@ -305,10 +313,11 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                         self.log.error("      e.g.: 2:5L  where 2 is an extended partition")
                         self.log.failed()
                         return None
-                    self._createLogicalPartition(
-                        diskEntry['device'],
-                        logical,
-                        part )
+                    if build:
+                        self._createLogicalPartition(
+                            diskEntry['device'],
+                            logical,
+                            part )
                     self._createPartitionEntry(
                         part,
                         logical,
@@ -338,10 +347,11 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                         self.log.error("   part_%s specified a second extended partition", part[0] )
                         self.log.failed()
                         return None
-                    self._createExtendedPartition(
-                        diskEntry['device'],
-                        primary,
-                        part )
+                    if build:
+                        self._createExtendedPartition(
+                            diskEntry['device'],
+                            primary,
+                            part )
                     self._createPartitionEntry(
                         part,
                         primary,
@@ -356,10 +366,11 @@ class SystemBuildMsdosPartitions(CsmakeModule):
                         self.log.error("   However, part_%s defines a 5th partition", part[0])
                         self.log.failed()
                         return None
-                    self._createPrimaryPartition(
-                        diskEntry['device'],
-                        primary,
-                        part )
+                    if build:
+                        self._createPrimaryPartition(
+                            diskEntry['device'],
+                            primary,
+                            part )
                     self._createPartitionEntry(
                         part,
                         primary,
@@ -388,17 +399,17 @@ class SystemBuildMsdosPartitions(CsmakeModule):
             self.log.warning("settle failed")
         for partdev, partnum, partpartition in self.swaps:
             try:
-                subprocess.check_call(
-                    ['sudo', 'mkswap', '-L',
-                       partpartition[0],
-                       self.partEntry[partpartition[0]]['device']],
-                    stdout=self.log.out(),
-                    stderr=self.log.err())
+                if build:
+                    subprocess.check_call(
+                        ['sudo', 'mkswap', '-L',
+                           partpartition[0],
+                           self.partEntry[partpartition[0]]['device']],
+                        stdout=self.log.out(),
+                        stderr=self.log.err())
                 self.partEntry[partpartition[0]]['fstab-id'] = 'LABEL=%s' % partpartition[0]
                 diskEntry['swaps'].append((partpartition[0], self.partEntry[partpartition[0]]))
             except:
                 self.log.exception("The swap, '%s', could not be initialized", partpartition[0])
-
 
         self.log.passed()
         return self.partEntry

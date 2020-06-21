@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2019 Cardinal Peak Technologies, LLC
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -17,6 +18,7 @@
 from Csmake.CsmakeAspect import CsmakeAspect
 import subprocess
 import os.path
+import fcntl
 import glob
 
 class MountDiskDrivePartitions(CsmakeAspect):
@@ -144,6 +146,10 @@ class MountDiskDrivePartitions(CsmakeAspect):
                 stderr=self.log.err() )
             if result != 0:
                 self.log.warning("Couldn't remove loopback device")
+        subprocess.check_call(
+            ['sudo', 'ioctl', self.loopbackDevice, '19457'],
+            stdout=self.log.out(),
+            stderr=self.log.err() )
 
         #mountdev = self.partitionMapping[dev]
         subprocess.call(

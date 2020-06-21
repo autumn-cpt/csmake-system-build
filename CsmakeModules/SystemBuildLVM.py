@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2019 Autumn Samantha Jeremiah Patterson
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -23,6 +24,7 @@ class SystemBuildLVM(CsmakeModule):
     """Purpose: Set up LVM on the given system
        Library: csmake-system-build
        Phases: build, system_build - create the definition of the system
+               use_system_build - reuse a created lvm system
        Options:
            system - The SystemBuild system name to put LVM on
            pv_<name> - provide the SystemBuildDisk and Partition to use
@@ -72,6 +74,11 @@ class SystemBuildLVM(CsmakeModule):
         vgsremoved = []
         vgsNotRemoved = []
         retry = False
+        for vg, pvs in self.vgsCreated:
+            result = subprocess.call(
+                ['sudo', 'vgchange', '-an', vg],
+                stdout=self.log.out(),
+                stderr=self.log.err())
         for vg, pvs in self.vgsCreated:
             if vg in vgsremoved:
                 continue
@@ -142,7 +149,8 @@ class SystemBuildLVM(CsmakeModule):
         # - umm...I can't even sudo ls /etc/lvm/archive/*, so this is the
         #         next best thing.
         vgsplat = subprocess.check_output(
-            ['sudo', 'ls', '-R', '/etc/lvm/archive'] )
+            ['sudo', 'ls', '-R', '/etc/lvm/archive'],
+            stderr=self.log.err() )
         vgfiles = vgsplat.split()[1:]
         for vg, pvs in self.vgsCreated:
             for vgfile in vgfiles:
@@ -173,6 +181,12 @@ class SystemBuildLVM(CsmakeModule):
     def system_build(self, options):
         return self.build(options)
     def build(self, options):
+        return self._setupLvm(options, True)
+
+    def use_system_build(self, options):
+        return self._setupLvm(options, False)
+
+    def _setupLvm(self, options, build):
         system = options['system']
         key = self._getEnvKey(system)
 
@@ -192,6 +206,36 @@ class SystemBuildLVM(CsmakeModule):
         self.vgsCreated = []
         self.lvsCreated = []
         try:
+            #Set up all vgs
+            vglist = []
+            vgpvlists = {}
+            currentvgs = []
+            currentvgout = subprocess.check_output(
+                ['sudo', 'vgs', '--noheadings'],
+                stderr=self.log.err() )
+            lines = currentvgout.split('\n')
+            for line in lines:
+                if len(line.strip()) == 0:
+                    continue
+                vgparts = line.split(' ')
+                for vgpart in vgparts:
+                    current = vgpart.strip()
+                    if len(current) > 0:
+                        currentvgs.append(current)
+                        break
+            self.log.devdebug("currentvgs: ", str(currentvgs))
+
+            for option, value in options.iteritems():
+                if option.startswith("vg_"):
+                    volg = option[3:].strip()
+                    if volg in currentvgs:
+                        #TODO: Find a way to get the volume groups separated
+                        self.log.error("Volume group '%s' already exists on the build system", volg)
+                        self.log.failed()
+                        return None
+                    vglist.append(volg)
+                    vgpvlists[volg]=value
+
             #Set up all pvs
             pvlist = {}
             for option, value in options.iteritems():
@@ -219,55 +263,45 @@ class SystemBuildLVM(CsmakeModule):
                         phydev = "%sp%d" % (
                             phydev,
                             partEntry[part]['number'] )
-                    subprocess.check_call(
-                        ['sudo', 'pvcreate', '-M2', '-f', '-y', phydev],
-                        stdout = self.log.out(),
-                        stderr = self.log.err())
+                    if build:
+                        subprocess.check_call(
+                            ['sudo', 'pvcreate', '-M2', '-f', '-y', phydev],
+                            stdout = self.log.out(),
+                            stderr = self.log.err())
+                    else:
+                        subprocess.check_call(
+                            ['sudo', 'pvscan', '--cache', phydev],
+                            stdout = self.log.out(),
+                            stderr = self.log.err())
                     pvlist[phyv] = phydev
                     self.pvsCreated.append(phydev)
 
-            #Set up all vgs
-            vglist = []
-            currentvgs = []
-            currentvgout = subprocess.check_output(
-                ['sudo', 'vgs', '--noheadings'] )
-            lines = currentvgout.split('\n')
-            for line in lines:
-                if len(line.strip()) == 0:
-                    continue
-                vgparts = line.split(' ')
-                for vgpart in vgparts:
-                    current = vgpart.strip()
-                    if len(current) > 0:
-                        currentvgs.append(current)
-                        break
-
-            for option, value in options.iteritems():
-                if option.startswith("vg_"):
-                    volg = option[3:].strip()
-                    if volg in currentvgs:
-                        #TODO: Find a way to get the volume groups separated
-                        self.log.error("Volume group '%s' already exists on the build system", volg)
+            #This is the rest of the vg processing
+            for volg in vglist:
+                value = vgpvlists[volg]
+                phyvs = value.split(',')
+                phydevs = []
+                for phyv in phyvs:
+                    current = phyv.strip()
+                    if current not in pvlist:
+                        self.log.error("pv '%s' not created", current)
                         self.log.failed()
                         return None
-                    vglist.append(volg)
-                    phyvs = value.split(',')
-                    phydevs = []
-                    for phyv in phyvs:
-                        current = phyv.strip()
-                        if current not in pvlist:
-                            self.log.error("pv '%s' not created", current)
-                            self.log.failed()
-                            return None
-                        phydev = pvlist[current]
-                        phydevs.append(phydev)
+                    phydev = pvlist[current]
+                    phydevs.append(phydev)
+                if build:
                     calllist = ['sudo', 'vgcreate', '-M2', volg]
                     calllist.extend(phydevs)
                     subprocess.check_call(
                         calllist,
                         stdout = self.log.out(),
                         stderr = self.log.err() )
-                    self.vgsCreated.append((volg, phydevs))
+                else:
+                    subprocess.check_call(
+                        ['sudo', 'vgchange', '-ay', volg],
+                        stdout = self.log.out(),
+                        stderr = self.log.err() )
+                self.vgsCreated.append((volg, phydevs))
 
             results = {}
             for option, value in options.iteritems():
@@ -280,10 +314,16 @@ class SystemBuildLVM(CsmakeModule):
                         self.log.error("Logical Volume '%s' error: Volume group '%s' not defined", logv, volg)
                         self.log.failed()
                         return None
-                    subprocess.check_call(
-                        ['sudo', 'lvcreate', '-n', logv, '-L', size, volg],
-                        stdout = self.log.out(),
-                        stderr = self.log.err())
+                    if build:
+                        subprocess.check_call(
+                            ['sudo', 'lvcreate', '-n', logv, '-L', size, volg],
+                            stdout = self.log.out(),
+                            stderr = self.log.err())
+                    else:
+                        subprocess.check_call(
+                            ['sudo', 'lvchange', '-ay', "{}/{}".format(volg, logv)],
+                            stdout = self.log.out(),
+                            stderr = self.log.err())
                     self.lvsCreated.append((logv, volg))
 
                     #Add to the "disks" available. assume dsf == dev/volg/logv
@@ -302,6 +342,16 @@ class SystemBuildLVM(CsmakeModule):
                         'path' : volg }
                     results[logv] = systemEntry['disks'][logv]
             success = True
+            verbose_params = []
+            if self.settings['verbose']:
+                verbose_params = ['-v']
+            if self.settings['debug']:
+                verbose_params = ['-vv']
+            subprocess.call(
+                ['sudo', 'vgmknodes'] + verbose_params,
+                stdout = self.log.out(),
+                stderr = self.log.err())
+
             #Cleanup methods are executed in reverse order
             #The lvm cleanup has to occur after the loop device cleanup,
             #or wreck the lvms created on the device.

@@ -56,7 +56,7 @@ class ConvertVirtualImage(CsmakeModule):
             os.remove(toImage)
 
     def package_vm(self, options):
-        return self.build
+        return self.build(options)
 
     def build(self, options):
         if 'tool' in options:

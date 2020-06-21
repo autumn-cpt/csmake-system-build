@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2019 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -26,7 +27,7 @@ class SystemBuildMount(CsmakeAspect):
              SystemBuildUnmount must be eventually specified.
        Library: csmake-system-build
        Phases:
-           build, system_build - Mount the system filesystem
+           build, system_build, use_system_build - Mount the system filesystem
        JoinPoints:
            start__build, start__system_build - Mount the system filesystem
            end__build - Unmount the system filesystem
@@ -455,6 +456,8 @@ class SystemBuildMount(CsmakeAspect):
         self.systemEntry['cleanup_methods'].append(self._onExit)
         return True
 
+    def use_system_build(self, options):
+        return self.build(options)
     def system_build(self, options):
         return self.build(options)
     def build(self, options):
@@ -467,8 +470,10 @@ class SystemBuildMount(CsmakeAspect):
         else:
             self.log.failed()
 
+    def start__use_system_build(self, phase, options, step, stepoptions):
+        return self.start__build(phase, options, step, stepoptions)
     def start__system_build(self, phase, options, step, stepoptions):
-        return start__build(self, phase, options, step, stepoptions)
+        return self.start__build(phase, options, step, stepoptions)
     def start__build(self, phase, options, step, stepoptions):
         self.options = options
         if not self._initModule():
@@ -479,8 +484,10 @@ class SystemBuildMount(CsmakeAspect):
         else:
             self.log.failed()
 
+    def end__use_system_build(self, phase, options, step, stepoptions):
+        return self.end__build(phase, options, step, stepoptions)
     def end__system_build(self, phase, options, step, stepoptions):
-        return end__system_build(self, phase, options, step, stepoptions)
+        return self.end__build(phase, options, step, stepoptions)
     def end__build(self, phase, options, step, stepoptions):
         self._cleanUpMounts()
         self.log.passed()

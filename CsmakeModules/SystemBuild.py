@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2019 Autumn Samantha Jeremiah Patterson
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -20,11 +21,12 @@ import re
 class SystemBuild(CsmakeModule):
     """Purpose: Set up a system (computer/os install) build.
        Library: csmake-system-build
-       Phases: build, system_build - create the definition of the system
-               NOTE: When SystemBuild is used as a regular section,
-                     SystemBuildEnd must be called before exiting.
+       Phases: build, system_build, use_system_build 
+                 - create the definition of the system
+                   NOTE: When SystemBuild is used as a regular section,
+                       SystemBuildEnd must be called before exiting.
        JoinPoints:
-               start__build, start__system_build -
+               start__build, start__system_build, start__use_system_build -
                      Will wrapper a section with the releant info for the given
                      system
                    NOTE: Multiple aspects on a section are not guaranteed
@@ -37,9 +39,9 @@ class SystemBuild(CsmakeModule):
                          that is relevant can be done easily by using this
                          section as an aspect on the relevant
                          command or subcommand section
-               end__build, end__system_build - will end the wrappering
-                     for the system build and free resources related
-                     to the system build.
+               end__build, end__system_build, end__use_system_build
+                     Will end the wrappering for the system build and
+                     free resources related to the system build.
 
        Options:
            system - A build internal name for the system being created
@@ -93,6 +95,8 @@ class SystemBuild(CsmakeModule):
             endvalue = sizeValue
         return endvalue
 
+    def use_system_build(self, options):
+        return self.build(options)
     def system_build(self, options):
         return self.build(options)
     def build(self, options):
@@ -111,13 +115,17 @@ class SystemBuild(CsmakeModule):
         self.log.passed()
         return self.env.env[key]
 
+    def start__use_system_build(self, phase, options, step, stepoptions):
+        return self.start__build(phase, options, step, stepoptions)
     def start__system_build(self, phase, options, step, stepoptions):
         return self.start__build(phase, options, step, stepoptions)
     def start__build(self, phase, options, step, stepoptions):
         return self.build(options)
 
+    def end__use_system_build(self, phase, options, step, stepoptions):
+        return self.end__build(phase, options, step, stepoptions)
     def end__system_build(self, phase, options, step, stepoptions):
-        return self.end__system_build(phase, options, step, stepoptions)
+        return self.end__build(phase, options, step, stepoptions)
     def end__build(self, phase, options, step, stepoptions):
         return self._cleanupSystem
 

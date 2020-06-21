@@ -1,4 +1,5 @@
 # <copyright>
+# (c) Copyright 2019 Autumn Samantha Jeremiah Patterson
 # (c) Copyright 2018 Cardinal Peak Technologies
 # (c) Copyright 2017 Hewlett Packard Enterprise Development LP
 #
@@ -22,6 +23,7 @@ class SystemBuildFileSystem(CsmakeModule):
     """Purpose: Set up the filesystem for the given system
        Library: csmake-system-build
        Phases: build, system_build - create the file and definition
+               use_system_build - capture fs definitions for mount
        Options:
            system - Name of the system to add the disk to
            <mount point> - The mount point to create, e.g. /boot or /root
@@ -62,6 +64,11 @@ class SystemBuildFileSystem(CsmakeModule):
     def system_build(self, options):
         return self.build(options)
     def build(self, options):
+        return self._createFileSystemRecord(options, True)
+    def use_system_build(self, options):
+        return self._createFileSystemRecord(options, False)
+
+    def _createFileSystemRecord(self, options, build):
         system = options['system']
         key = self._getEnvKey(system)
         if key not in self.env.env:
@@ -133,10 +140,11 @@ class SystemBuildFileSystem(CsmakeModule):
                 fsinfoEntry[mountpt]['partition'] = partEntry[partname]
                 fslabel = partname
                 fstabTarget = partEntry[partname]
-            subprocess.check_call(
-                ['sudo', 'mkfs', '-t', fstype] + fsoptions + [device],
-                stdout = self.log.out(),
-                stderr = self.log.err() )
+            if build:
+                subprocess.check_call(
+                    ['sudo', 'mkfs', '-t', fstype] + fsoptions + [device],
+                    stdout = self.log.out(),
+                    stderr = self.log.err() )
 
             #Only try labeling if we haven't already provided an fstab id
             #TODO: Consider attempting to get the UUID
@@ -146,7 +154,7 @@ class SystemBuildFileSystem(CsmakeModule):
                 labeler = "_labelFileSystem_%s" % fstype
                 if hasattr(self, labeler):
                     try:
-                        newlabel = getattr(self, labeler)(fslabel, device)
+                        newlabel = getattr(self, labeler)(fslabel, device, build)
                         if newlabel is not None:
                             fstabTarget['fstab-id'] = "LABEL=%s" % newlabel
                         else:
@@ -159,54 +167,60 @@ class SystemBuildFileSystem(CsmakeModule):
         return fsEntry
 
     #To add more supported file systems, subclass and add more _labelFileSystem
-    def _labelFileSystem_ext2(self, fslabel, device):
-        return self._labelFileSystem_ext(fslabel, device)
-    def _labelFileSystem_ext3(self, fslabel, device):
-        return self._labelFileSystem_ext(fslabel, device)
-    def _labelFileSystem_ext4(self, fslabel, device):
-        return self._labelFileSystem_ext(fslabel, device)
+    def _labelFileSystem_ext2(self, fslabel, device, build):
+        return self._labelFileSystem_ext(fslabel, device, build)
+    def _labelFileSystem_ext3(self, fslabel, device, build):
+        return self._labelFileSystem_ext(fslabel, device, build)
+    def _labelFileSystem_ext4(self, fslabel, device, build):
+        return self._labelFileSystem_ext(fslabel, device, build)
 
-    def _labelFileSystem_ext(self, fslabel, device):
-        subprocess.check_call(
-            ['sudo', 'e2label', device, fslabel],
-            stdout=self.log.out(),
-            stderr=self.log.err() )
+    def _labelFileSystem_ext(self, fslabel, device, build):
+        if build:
+            subprocess.check_call(
+                ['sudo', 'e2label', device, fslabel],
+                stdout=self.log.out(),
+                stderr=self.log.err() )
         return fslabel
 
-    def _labelFileSystem_btrfs(self, fslabel, device):
-        subprocess.check_call(
-            ['sudo', 'btrfs', 'filesystem', 'label', device, fslabel],
-            stdout=self.log.out(),
-            stderr=self.log.err() )
+    def _labelFileSystem_btrfs(self, fslabel, device, build):
+        if build:
+            subprocess.check_call(
+                ['sudo', 'btrfs', 'filesystem', 'label', device, fslabel],
+                stdout=self.log.out(),
+                stderr=self.log.err() )
         return fslabel
 
-    def _labelFileSystem_vfat(self, fslabel, device):
+    def _labelFileSystem_vfat(self, fslabel, device, build):
         fslabel = fslabel[:min(len(fslabel),11)].upper()
-        subprocess.check_call(
-            ['sudo', 'fatlabel', device, fslabel],
-            stdout=self.log.out(),
-            stderr=self.log.err() )
+        if build:
+            subprocess.check_call(
+                ['sudo', 'fatlabel', device, fslabel],
+                stdout=self.log.out(),
+                stderr=self.log.err() )
         return fslabel
-    def _labelFileSystem_fat(self, fslabel, device):
-        return self._labelFileSystem_vfat(fslabel, device)
+    def _labelFileSystem_fat(self, fslabel, device, build):
+        return self._labelFileSystem_vfat(fslabel, device, build)
 
-    def _labelFileSystem_NTFS(self, fslabel, device):
-        subprocess.check_call(
-            ['sudo', 'ntfslabel', device, fslabel],
-            stdout=self.log.out(),
-            stderr=self.log.err())
-        return fslabel
-
-    def _labelFileSystem_jfs(self, fslabel, device):
-        subprocess.check_call(
-            ['sudo', 'jfs_tune', '-L', fslabel, device],
-            stdout=self.log.out(),
-            stderr=self.log.err())
+    def _labelFileSystem_NTFS(self, fslabel, device, build):
+        if build:
+            subprocess.check_call(
+                ['sudo', 'ntfslabel', device, fslabel],
+                stdout=self.log.out(),
+                stderr=self.log.err())
         return fslabel
 
-    def _labelFileSystem_xfs(self, fslabel, device):
-        subprocess.check_call(
-            ['sudo', 'xfs_admin', '-L', fslabel, device],
-            stdout=self.log.out(),
-            stderr=self.log.err())
+    def _labelFileSystem_jfs(self, fslabel, device, build):
+        if build:
+            subprocess.check_call(
+                ['sudo', 'jfs_tune', '-L', fslabel, device],
+                stdout=self.log.out(),
+                stderr=self.log.err())
+        return fslabel
+
+    def _labelFileSystem_xfs(self, fslabel, device, build):
+        if build:
+            subprocess.check_call(
+                ['sudo', 'xfs_admin', '-L', fslabel, device],
+                stdout=self.log.out(),
+                stderr=self.log.err())
         return fslabel

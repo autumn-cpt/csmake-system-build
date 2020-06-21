@@ -1,5 +1,5 @@
 # <copyright>
-# (c) Copyright 2018 Cardinal Peak Technologies
+# (c) Copyright 2018-2019 Cardinal Peak Technologies
 #
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -41,7 +41,7 @@ class SystemBuildEfiGrubInstall(SystemBuildGrubInstall):
     #TODO: Make GRUB_OPTIONS dynamic from init, initialized from the static
     GRUB_OPTIONS = ['-v', '--no-floppy', '--recheck', '--no-nvram']
 
-    def package_vm(self, options):
+    def system_build(self, options):
         return self.build(options)
 
     def build(self, options):
